@@ -22,6 +22,7 @@ import errno
 import yaml
 import string
 
+
 try:
     import subprocess as sp
 except ImportError:
@@ -92,6 +93,8 @@ versions where upgrading will take time
 # through script. If Target_image mentioned in yaml then that image should be kept only in 
 # target_system_image path mentioned within poap script. No relative path support for Target_image in yaml file
 
+
+#Global options that are used throughout the script
 options = {
    "username": "username",
    "password": "password",
@@ -110,121 +113,6 @@ to latest BIOS available with the new image.
 global_use_kstack = False
 global_upgrade_bios = False
 global_copy_image = True
-
-def download_scripts_and_agents():
-    """
-    Downloads user scripts, agents, and data after downloading config, but before installing
-    the target image.  If an application is to be installed in the native Linux environment,
-    uncomment and update the call to install_shell_script() as needed.
-    The parameters are as follows:
-        source_path: the server path or source path where the source file lives (e.g. /tftpboot)
-        source_file: the name of the file on the server / source to download (e.g. agents.tar)
-        dest_path: optional (defaults to /bootflash) parameter to specify where to download to
-                   any intermediate directories will automatically be created.
-        dest_file: optional (defaults to same name as source) parameter to specify the target name
-        unpack: optional (defaults to False) parameter specifying if we should attempt to extract
-                this file. The command 'tar -xf <target> -C /bootflash' is used for extraction.
-        delete_after_unpack: optional (defaults to False) parameter specifying that we delete
-                             the target file after successful extraction.
-    """
-    source_location = options["user_app_path"]
-    # poap_log("Downloading scripts and agents from %s" % source_location)
-
-    """
-    Download the agent "monitor_dummy.py" from options["user_app_path"] to
-     /bootflash/monitor_agent and rename it to "monitor_agent.py"
-    """
-    # download_user_app(source_location, "monitor_dummy.py", "/bootflash/monitor_agent/",
-    #                  "monitor_agent.py")
-
-    """
-    Download a tarball containing several agents from /var/lib/tftpboot/agent_bundles to
-    /bootflash/agent_root; don't rename the tarball.  Then unpack this tarball
-     (tar -xf <tarball> -C /bootflash). If the tarball contains a directory called "agents" with
-     3 agents inside of it, they will be unpacked to /bootflash/agents. Delete the tarball
-     after successfully extracting the files.
-    """
-    # download_user_app("/var/lib/tftpboot/agent_bundles", "agent_directory.tar",
-    #                    "/bootflash/agent_root", unpack=True, delete_after_unpack=True)
-
-    """
-    Download a shell script / agent called bootflash_agent.sh from options["user_app_path"]
-     to /bootflash. Leave it named "bootflash_agent.sh"
-    """
-    # download_user_app(source_location, "bootflash_agent.sh")
-
-    """
-    Download a shell script / agent called "bootflash_agent.sh" from options["user_app_path"]
-     to /bootflash, but rename it "different_name_agent.sh"
-    """
-    # download_user_app(source_location, "bootflash_agent.sh", "/bootflash",
-    #                  "different_name_agent.sh")
-
-    """
-    Install a shell script that has already been downloaded
-    """
-    # install_shell_script("/bootflash", "poap_install")
-
-
-def download_user_app(source_path, source_file, dest_path="/bootflash", dest_file="", unpack=False,
-                      delete_after_unpack=False):
-    """
-    Downloads a user application, script, or data item.
-    source_path: the source directory the file we want to download resides in
-    source_file: the source file to download
-    dest_path: optional parameter specifying where we want to copy the file to
-    dest_file: optional parameter specifying what we want to name the file after we copy it
-    unpack: optional boolean parameter specifying if we want to attempt to extract this file
-    delete_after_unpack: optional boolean parameter specifying if we want to delete the tarball
-    """
-    # If the user doesn't specify the destination filename, use the same one as the source
-    if dest_file == "":
-        dest_file = source_file
-
-    src = os.path.join(source_path, source_file)
-    dst = os.path.join(dest_path, dest_file)
-
-    tmp_file = "%s.tmp" % dst
-
-    # Create intermediate directories if required for agents
-    try:
-        os.makedirs(dest_path)
-    except OSError as e:
-        if e.errno != errno.EEXIST or not os.path.isdir(dest_path):
-            raise
-
-    do_copy(src, dst, options["timeout_copy_user"], tmp_file)
-
-    if unpack == True:
-        poap_log("Unpacking %s to /bootflash" % dst)
-
-        unpack_success = False
-        # Before Python 2.7 (no subprocess module at all)
-        if sp == None:
-            try:
-                os.system("tar -xf %s -C /bootflash" % dst)
-                unpack_success = True
-            except Exception as e:
-                poap_log("Failed to unpack %s: %s" % (dst, str(e)))
-        else:
-            try:
-                out = sp.check_output("tar -xf %s -C /bootflash" % dst, shell=True,
-                                      stderr=sp.STDOUT)
-                unpack_success = True
-            except AttributeError as e:
-                try:
-                    os.system("tar -xf %s -C /bootflash" % dst)
-                    unpack_success = True
-                except Exception as e:
-                    poap_log("Failed to unpack %s: %s" % (dst, str(e)))
-            except OSError as e:
-                poap_log("Failed to unpack %s: %s" % (dst, str(e)))
-            except sp.CalledProcessError as e:
-                poap_log("Failed to unpack %s: %s (%s)" % (dst, str(e), e.output))
-
-        # Now that we know we extracted the contents, cleanup the tarball
-        if unpack_success == True and delete_after_unpack == True:
-            remove_file(dst)
 
 
 def install_shell_script(source_path, source_file):
@@ -336,8 +224,7 @@ def set_defaults_and_validate_options():
     set_default("use_nxos_boot", False)
     set_default("https_ignore_certificate", False)
     
-    # User app path
-    set_default("user_app_path", "/var/lib/tftpboot/")
+
 
     # MD5 Verification
     set_default("disable_md5", False)
@@ -368,7 +255,6 @@ def set_defaults_and_validate_options():
     set_default("timeout_copy_system", 2100)  # 35 minutes
     set_default("timeout_copy_kickstart", 900)  # 15 minutes
     set_default("timeout_copy_personality", 900)  # 15 minutes
-    set_default("timeout_copy_user", 900)  # 15 minutes
 
     # Personality
     set_default("personality_path", "/var/lib/tftpboot")
