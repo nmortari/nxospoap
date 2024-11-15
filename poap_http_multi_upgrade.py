@@ -101,7 +101,13 @@ options = {
    "hostname": "10.0.0.6",
    "transfer_protocol": "http",
    "mode": "serial_number",
-   "target_system_image": "nxos64-cs.10.3.4a.M.bin",
+   #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "config_path": "/files/poap/config/",
+   "upgrade_image_path": "/files/nxos/",
+   "required_space": 100000,
+   "https_ignore_certificate": False,
+   "disable_md5": False,
 }
 
 """
@@ -134,7 +140,7 @@ def set_defaults_and_validate_options():
         # If the mode is personality, just inititalize the variable (basically a list but without duplicates)
         required_parameters = set()
     else:
-        required_parameters = set(["target_system_image"])
+        required_parameters = set(["upgrade_path"])
 
     # USB doesn't require remote credentials
     if os.environ.get("POAP_PHASE", None) != "USB":
@@ -147,33 +153,38 @@ def set_defaults_and_validate_options():
     # If we are missing any required parameters
     missing_parameters = required_parameters.difference(list(options.keys()))
     if len(missing_parameters) != 0:
+        poap_log("Required parameters are: %s" % ", ".join(required_parameters))
         poap_log("Required parameters are missing:")
         abort("Missing %s" % ", ".join(missing_parameters))
 
     # Set the POAP mode
-    set_default("mode", "serial_number")
-
+    set_default("mode", options["mode"])
+    
+    # The next upgrade to target on the path
+    set_default("upgrade_system_image", "")
+    # List of the Cisco approved upgrade path
+    set_default("upgrade_path", options["upgrade_path"])
     # Required space to copy config kickstart and system image in KB
-    set_default("required_space", 100000)
+    set_default("required_space", options["required_space"])
     # Transfer protocol (http, ftp, tftp, scp, etc.)
-    set_default("transfer_protocol", "scp")
+    set_default("transfer_protocol", options["transfer_protocol"])
     # Directory where the config resides
-    set_default("config_path", "/files/poap/config/")
+    set_default("config_path", options["config_path"])
     # Target image and its path (single image is default)
-    set_default("target_image_path", "/files/nxos/")
+    set_default("upgrade_image_path", options["upgrade_image_path"])
     # Destination image and its path
     set_default("destination_path", "/bootflash/")
     #set_default("destination_system_image", options["target_system_image"])
     #set_default("destination_midway_system_image", "midway_system.bin")
-    set_default("midway_system_image", "")
-    set_default("skip_multi_level", False)
+    #set_default("midway_system_image", [])
+    #set_default("skip_multi_level", False)
     set_default("serial_number","")
     set_default("install_path", "")
     set_default("use_nxos_boot", False)
-    set_default("https_ignore_certificate", False)
+    set_default("https_ignore_certificate", options["https_ignore_certificate"])
     
     # MD5 Verification
-    set_default("disable_md5", False)
+    set_default("disable_md5", options["disable_md5"])
 
     # Midway system and kickstart source file name.
     # This should be a 6.x U6 or greater dual image.
@@ -836,8 +847,7 @@ def verify_md5(md5given, filename):
         file_size = "Unknown"
 
     poap_log("Verifying MD5 checksum of %s (size %s)" % (filename, file_size))
-    poap_log(" md5given = %s md5calculated = %s" % (
-                 md5given, md5calculated))
+    poap_log(" md5given = %s md5calculated = %s" % (md5given, md5calculated))
     if md5given == md5calculated:
         poap_log("MD5 match for file = {0}".format(filename))
         return True
@@ -925,7 +935,7 @@ def do_copy(source="", dest="", login_timeout=10, dest_tmp="", compact=False, do
         user = options["username"]
         password = options["password"]
         dest_tmp = os.path.join(options["destination_path"], dest_tmp)
-        copy_tmp = dest_tmp.replace("/bootflash", "bootflash:", 1)
+        copy_tmp = dest_tmp.replace("/bootflash/", "bootflash:", 1)
         vrf = options["vrf"]
         poap_log("Transfering using %s from %s to %s hostname %s vrf %s" % (
                  protocol, source, copy_tmp, host, vrf))
@@ -1204,35 +1214,33 @@ def copy_system():
     else:
         do_compact = False
 
-    org_file = options["destination_system_image"]
+    org_file = options["upgrade_system_image"]
     if options["disable_md5"] == False:
-        copy_md5_info(options["target_image_path"], options["target_system_image"])
-        md5_sum_given = get_md5(options["target_system_image"])
-        remove_file(os.path.join(options["destination_path"], "%s.md5" %
-                                 options["target_system_image"]))
+        copy_md5_info(options["upgrade_image_path"], options["upgrade_system_image"])
+        md5_sum_given = get_md5(options["upgrade_system_image"])
+        remove_file(os.path.join(options["destination_path"], "%s.md5" % options["upgrade_system_image"]))
         poap_log("MD5 for system image from server: %s" % md5_sum_given)
-        if md5_sum_given and os.path.exists(os.path.join(options["destination_path"], options["target_system_image"])):
-            if verify_md5(md5_sum_given, os.path.join(options["destination_path"], options["target_system_image"])):
-                poap_log("File %s already exists and MD5 matches" %
-                         os.path.join(options["destination_path"], options["target_system_image"]))
+        if md5_sum_given and os.path.exists(os.path.join(options["destination_path"], options["upgrade_system_image"])):
+            if verify_md5(md5_sum_given, os.path.join(options["destination_path"], options["upgrade_system_image"])):
+                poap_log("File %s already exists and MD5 matches" % os.path.join(options["destination_path"], options["upgrade_system_image"]))
                 """
                 For multi-level install when the target system image is already
                 present in the box, overwrite midway_system image name that is
-                stored in destination_system_image with target_system_image.
+                stored in destination_system_image with upgrade_system_image.
                 """
-                options["destination_system_image"] = options["target_system_image"]
+                #options["destination_system_image"] = options["upgrade_system_image"]
                 del_system_image = False
                 return
         elif not md5_sum_given:
             abort("Invalid MD5 from server: %s" % md5_sum_given)
         else:
-            poap_log("File %s does not exist on switch" % options["target_system_image"])
+            poap_log("File %s does not exist on switch" % options["upgrade_system_image"])
 
     tmp_file = "%s.tmp" % org_file
     timeout = options["timeout_copy_system"]
 
     # For personality we use the personality path for everything
-    src = os.path.join(options["target_image_path"], options["target_system_image"])
+    src = os.path.join(options["upgrade_image_path"], options["upgrade_system_image"])
 
     poap_log("INFO: Starting Copy of System Image")
 
@@ -1243,12 +1251,9 @@ def copy_system():
         do_copy(src, org_file, timeout, tmp_file)
 
     if options["disable_md5"] == False and md5_sum_given and do_compact == False:
-        if not verify_md5(md5_sum_given,
-                          os.path.join(options["destination_path"], org_file)):
-            abort("#### System file %s MD5 verification failed #####\n" % os.path.join(
-                         options["destination_path"], org_file))
-    poap_log("INFO: Completed Copy of System Image to %s" % os.path.join(
-        options["destination_path"], org_file))
+        if not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
+            abort("#### System file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
+    poap_log("INFO: Completed Copy of System Image to %s" % os.path.join(options["destination_path"], org_file))
     del_system_image = True
 
 
@@ -1305,9 +1310,8 @@ def install_images_7_x():
 
     poap_log("Installing NXOS image")
 
-    system_image_path = os.path.join(options["destination_path"],
-                                     options["destination_system_image"])
-    system_image_path = system_image_path.replace("/bootflash", "bootflash:", 1)
+    system_image_path = os.path.join(options["destination_path"], options["upgrade_system_image"])
+    system_image_path = system_image_path.replace("/bootflash/", "bootflash:", 1)
 
     try:
         poap_log("config terminal ; boot nxos %s" % system_image_path)
@@ -1339,18 +1343,19 @@ def install_images_7_x():
 def install_nxos_issu():
     ''' 
        global_copy_image is false implies that currently running and target_iamge
-       have the same version. So, we do install all with the curretly booted image
+       have the same version. So, we do install all with the next OS image in the upgrade path
        instead of doing it with the name specified in target_image, because actual
        copying of image may not have happened, leading to failure in ISSU if name of
        the target image is different from the image that the switch is currently booted
        up with. 
     ''' 
     if global_copy_image:
-        system_image_path = os.path.join(options["destination_path"],
-                                     options["destination_system_image"])
-        system_image_path = system_image_path.replace("/bootflash", "bootflash:", 1)
+        system_image_path = os.path.join(options["destination_path"], options["upgrade_system_image"])
+        system_image_path = system_image_path.replace("/bootflash/", "bootflash:", 1)
+        poap_log("The upgrade system image path is: " + system_image_path)
     else:
         system_image_path = os.path.join("bootflash:",get_currently_booted_image_filename())
+        poap_log("The currently booted image filename is: " + system_image_path)
     
     try:
         os.system("touch /tmp/poap_issu_started")
@@ -1373,17 +1378,15 @@ def install_images():
     If two step installation is true, just set the bootvariables and
     do no update startup-config so that step two of POAP is triggered.
     """
-    kickstart_path = os.path.join(options["destination_path"],
-                                  options["destination_kickstart_image"])
-    kickstart_path = kickstart_path.replace("/bootflash", "bootflash:", 1)
+    #kickstart_path = os.path.join(options["destination_path"], options["destination_kickstart_image"])
+    #kickstart_path = kickstart_path.replace("/bootflash", "bootflash:", 1)
 
-    system_path = os.path.join(options["destination_path"],
-                               options["destination_system_image"])
+    system_path = os.path.join(options["destination_path"], options["upgrade_system_image"])
     system_path = system_path.replace("/bootflash", "bootflash:", 1)
 
-    poap_log("Installing kickstart and system images")
+    #poap_log("Installing kickstart and system images")
     poap_log("######### Copying the boot variables ##########")
-    cli("config terminal ; boot kickstart %s" % kickstart_path)
+    #cli("config terminal ; boot kickstart %s" % kickstart_path)
     cli("config terminal ; boot system %s" % system_path)
 
     command_successful = False
@@ -1406,12 +1409,12 @@ def install_images():
 
     poap_log("INFO: Configuration successful")
 
-    if multi_step_install == True:
-        cli("config terminal ; terminal dont-ask ; write erase")
-        poap_log("Midway image copy/setting done")
-        exit(0)
-    else:
-        poap_log("Multi-level install not set, installed images")
+    # if multi_step_install == True:
+    #     cli("config terminal ; terminal dont-ask ; write erase")
+    #     poap_log("Midway image copy/setting done")
+    #     exit(0)
+    # else:
+    #     poap_log("Multi-level install not set, installed images")
 
 #Procedure to intall using ISSU install command
 def install_issu():
@@ -1424,12 +1427,11 @@ def install_issu():
        up with. 
     '''
     if global_copy_image:
-        system_image_path = os.path.join(options["destination_path"],
-                                        options["destination_system_image"])
+        system_image_path = os.path.join(options["destination_path"], options["upgrade_system_image"])
         system_image_path = system_image_path.replace("/bootflash", "bootflash:", 1)
     else:
         system_image_path = os.path.join("bootflash:",get_currently_booted_image_filename())
- 
+
     img_upgrade_cmd = "config terminal ; terminal dont-ask"
     img_upgrade_cmd += " ; install all nxos %s non-interruptive override" % system_image_path
     try:
@@ -2123,12 +2125,31 @@ def get_currently_booted_image_filename():
 
 def set_next_upgrade_from_user():
     """
-    Forces a 2 step upgrade if initiated by the user. We first check if we're currently on the
-    midway image, and if not, we make that the next image we're going to boot into.
+    Forces a multi step upgrade if initiated by the user. We first check if we're currently on the
+    final image, and if not, we make that the next image we're going to boot into.
     """
     global multi_step_install
 
     current_image_file = get_currently_booted_image_filename()
+    poap_log("Current image file has been set as: " + current_image_file)
+
+    if options["target_system_image"] == current_image_file:
+        poap_log("This switch is already on the final target image")
+        return
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # The currently booted image file is not the midway destination file. That means
     # that we did not already do the midway step, and we need to go there next
@@ -2160,56 +2181,25 @@ def set_next_upgrade_from_upgrade_path():
     override the upgrade that is used if we detect that we need to follow the upgrade path.
     """
     global options
-    global multi_step_install
-    
+
     poap_log("WE ARE IN THE NEXT UPGRADE PATH FUNCTION")
     
-    # 5.0(3)U5(1), 6.0(2)U6(2a), 6.0(2)U6(7), 7.0(3)I3(1)
-    upgrade_images = [["n3000-uk9-kickstart.5.0.3.U5.1.bin", "n3000-uk9.5.0.3.U5.1.bin"],
-                      ["n3000-uk9-kickstart.6.0.2.U6.2a.bin", "n3000-uk9.6.0.2.U6.2a.bin"],
-                      ["n3000-uk9-kickstart.6.0.2.U6.7.bin", "n3000-uk9.6.0.2.U6.7.bin"]]
+    current_image_file = get_currently_booted_image_filename()
+    poap_log("The currently running image file is : " + current_image_file)
 
-    # Check currently running image
-    version = get_version()
-
-    image_info = re.match("(\d+)\.(\d+)\((\d+)\)[A-Z]+(\d+)\((\w+)\)", version)
-    if image_info == None:
-        #try the regex match for 9.2(1) or higher version scheme
-        image_info = re.match("(\d+)\.(\d+)\((\d+)[a-z]?\)", version)
-        if image_info == None:
-            abort("Failed to extract image information from %s" % version)
-
-    current_idx = find_upgrade_index_from_match(image_info)
-
-    # Check the target image
-    image_info = re.search("[\w-]+\.(\d+)\.(\d+)\.(\d+)\.[A-Z]+(\d+)\.(\w+)",
-                           options["target_system_image"])
-
-    if image_info == None:
-        #try the regex match for 9.2 or higher version scheme
-        image_info = re.search("[\w-]+\.(\d+)\.(\d+)\.(\d+)", options["target_system_image"])
-        if image_info == None:
-            poap_log("Failed to match target image: %s" % options["target_system_image"])
-            exit(1)
-
-    target_idx = find_upgrade_index_from_match(image_info)
-
-    if (target_idx - current_idx) > 0:
-        poap_log("Multi-level install is set")
-
-        # Update the target image with the upgrade path midway images
-        options["target_kickstart_image"] = upgrade_images[current_idx][0]
-        options["target_system_image"] = upgrade_images[current_idx][1]
-
-        poap_log("Next upgrade is %s from %s" % (str(upgrade_images[current_idx][1]), version))
-
-        # Keep overwriting midway images
-        options["destination_kickstart_image"] = options["destination_midway_kickstart_image"]
-        options["destination_system_image"] = options["destination_midway_system_image"]
-
-        multi_step_install = True
-    else:
-        poap_log("Multi-level install is not needed")
+    if options["upgrade_path"][-1] == current_image_file:
+        poap_log("This switch is already on the final target image")
+        return None
+    # look at everything except the final image in the upgrade path
+    if current_image_file in options["upgrade_path"][:-1]:
+        next_image_index = options["upgrade_path"].index(current_image_file) + 1
+        options["upgrade_system_image"] = options["upgrade_path"][next_image_index]
+        poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], current_image_file))
+        # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path
+        return options["upgrade_system_image"] == options["upgrade_path"][-1]
+    
+    poap_log("Image %s is not on the upgrade path" % current_image_file)
+    return None
 
 
 def download_personality_tarball():
@@ -2343,33 +2333,6 @@ def setup_logging():
     poap_cleanup_script_logs()
 
 
-def check_multilevel_install():
-    """
-    Checks whether or not the multi-level install procedure is needed. Sets
-    multi_step_install to True if it is needed. Also sets single_image to
-    True if the target image is a 7x or higher image.
-    """
-    global options, single_image
-    
-    # User wants to override multi level install
-    #if options["skip_multi_level"] == True:
-    #    single_image = True
-    #    poap_log("WE ARE IN THE SKIP MULTI LEVEL TRUE STATEMENT")
-    #    return
-
-    # User wants to override the midway image
-    if options["midway_system_image"] != "":
-        set_next_upgrade_from_user()
-    else:
-        if re.match("nxos.", options["target_system_image"]) \
-            or re.match("n9000", options["target_system_image"]):
-            poap_log("Single image is set")
-            single_image = True
-        else:
-            poap_log("Single image is not set")
-            single_image = False
-            set_next_upgrade_from_upgrade_path()
-
 def invoke_personality_restore():
     """
     Does a write erase (so POAP will run again) and invokes the
@@ -2391,13 +2354,8 @@ def cleanup_temp_images():
     Cleans up the temporary images if they exist. These are the midway images
     that are downloaded for multi-level install
     """
-    if options["destination_kickstart_image"] != options["destination_midway_kickstart_image"]:
-        midway_kickstart = os.path.join(options["destination_path"],
-                                        options["destination_midway_kickstart_image"])
-        remove_file(midway_kickstart)
-    if options["destination_system_image"] != options["destination_midway_system_image"]:
-        midway_system = os.path.join(options["destination_path"],
-                                     options["destination_midway_system_image"])
+    if options["upgrade_system_image"] != options["upgrade_path"][-1]:
+        midway_system = os.path.join(options["destination_path"], options["upgrade_system_image"])
         remove_file(midway_system)
 
 
@@ -2455,12 +2413,6 @@ def main():
     poap_log("This switch has the following IP address(es):")
     
     IP_addresses = show_IP_addresses.split('\n')
-
-    # index = 0
-    # while index < len(IP_addresses):
-    #     poap_log(IP_addresses[index])
-    #     index += 1
-    
     for IP in IP_addresses:
         poap_log(IP)
         
@@ -2474,39 +2426,47 @@ def main():
     # the directory structure needed, if any
     create_destination_directories()
 
+    poap_log("The install path is: " + options["install_path"])
+
+    # We are not using this option
     if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
         parse_poap_yaml()
-    check_multilevel_install()
-    # In two step install we just copy the midway image and reboot.
-    # Config copy and script download happens in the second step.
-    if multi_step_install == False:
+    #check_multilevel_install()
+
+    upgrade_set = set_next_upgrade_from_upgrade_path()
+    if upgrade_set is None:
+        log_hdl.close()
+        exit(0)
+    elif upgrade_set == True:
         copy_config()
 
-        # Download user scripts and agents
-        download_scripts_and_agents()
-        # End of multi_step_install is False block
+    # In two step install we just copy the midway image and reboot.
+    # Config copy and script download happens in the final OS installation step.
+    #if multi_step_install == False:
+        #copy_config()
+
 
     if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
         validate_yaml_file()
         copy_poap_files()
         time.sleep(2)
-        install_license()
-        install_rpm()
+        #install_license()
+        #install_rpm()
         time.sleep(2)
-        install_certificate()
+        #install_certificate()
         time.sleep(2)
         copy_standby_files()
         
     copy_system()
 
-    if single_image == False:
-        copy_kickstart()
+    #if single_image == False:
+    #    copy_kickstart()
 
     signal.signal(signal.SIGTERM, sig_handler_no_exit)
     # install images
-    if single_image == False:
-        install_images()
-    elif global_upgrade_bios:
+    #if single_image == False:
+    #install_images()
+    if global_upgrade_bios:
         install_issu()
     elif options["use_nxos_boot"]:
         install_images_7_x()
