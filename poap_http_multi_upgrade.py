@@ -114,58 +114,6 @@ global_use_kstack = False
 global_upgrade_bios = False
 global_copy_image = True
 
-
-def install_shell_script(source_path, source_file):
-    """
-    Install a user shell script.
-    The users's shell script is copied to /etc/init.d, and chkconfig is run
-    so that the user's script will get executed when the switch boots.
-    source_path: the source directory the file we want to install resides in
-    source_file: the source file to install
-    """
-
-    fullpath = os.path.join(source_path, source_file)
-
-    poap_log("Installing %s" % fullpath)
-
-    try:
-        os.system("cp %s /etc/init.d" % fullpath)
-    except Exception as e:
-        poap_log("Failed to copy %s: %s" % (fullpath, str(e)))
-    else:
-        poap_log("Copy %s to /etc/init.d succeeded" % fullpath)
-
-    for i in range (0, 10):
-        try:
-            os.system("/usr/sbin/chkconfig --add %s" % source_file)
-        except Exception as e:
-            poap_log("Failed to chkconfig add %s: %s" % (source_file, str(e)))
-        else:
-            poap_log("Chkconfig add %s succeeded" % source_file)
-            if (os.system("ls /etc/rc3.d/*%s" % source_file) == 0):
-                poap_log("Chkconfig file exists, exiting retry loop")
-                break
-            else:
-                poap_log("Chkconfig file does not exist, sleeping and looping")
-                time.sleep(2)
-
-    for i in range (0, 10):
-        try:
-            os.system("/usr/sbin/chkconfig --level 3 %s on" % source_file)
-        except Exception as e:
-            poap_log("Failed to chkconfig level 3 %s on: %s" % (source_file, str(e)))
-        else:
-            poap_log("Chkconfig level 3 %s on succeeded" % source_file)
-            if (os.system("ls /etc/rc3.d/*%s" % source_file) == 0):
-                poap_log("Chkconfig file exists, exiting retry loop")
-                break
-            else:
-                poap_log("Chkconfig file does not exist, sleeping and looping")
-                time.sleep(2)
-
-    os.system("sync")
-    time.sleep(5)
-
 def set_defaults_and_validate_options():
     """
     Sets all the default values and creates needed variables for POAP to work.
@@ -181,13 +129,16 @@ def set_defaults_and_validate_options():
         abort("Options dictionary was not defined!")
 
     # Check which mode we're using
+    # Get the mode that the user has set and compare it to personality
     if options.get("mode", "") == "personality":
+        # If the mode is personality, just inititalize the variable (basically a list but without duplicates)
         required_parameters = set()
     else:
         required_parameters = set(["target_system_image"])
 
     # USB doesn't require remote credentials
     if os.environ.get("POAP_PHASE", None) != "USB":
+        # If the POAP phase is not USB, then do these things
         # Remote download needs more parameters
         required_parameters.add("username")
         required_parameters.add("password")
@@ -209,31 +160,26 @@ def set_defaults_and_validate_options():
     # Directory where the config resides
     set_default("config_path", "/files/poap/config/")
     # Target image and its path (single image is default)
-    set_default("target_system_image", "")
     set_default("target_image_path", "/files/nxos/")
-    set_default("target_kickstart_image", "")
     # Destination image and its path
     set_default("destination_path", "/bootflash/")
-    set_default("destination_system_image", options["target_system_image"])
-    set_default("destination_kickstart_image", options["target_kickstart_image"])
-    set_default("destination_midway_system_image", "midway_system.bin")
+    #set_default("destination_system_image", options["target_system_image"])
+    #set_default("destination_midway_system_image", "midway_system.bin")
+    set_default("midway_system_image", "")
     set_default("skip_multi_level", False)
-    set_default("destination_midway_kickstart_image", "midway_kickstart.bin")
-    set_default("serial_number","");
+    set_default("serial_number","")
     set_default("install_path", "")
     set_default("use_nxos_boot", False)
     set_default("https_ignore_certificate", False)
     
-
-
     # MD5 Verification
     set_default("disable_md5", False)
 
     # Midway system and kickstart source file name.
     # This should be a 6.x U6 or greater dual image.
     # Required only if moving from pre 6.x U6 image to 7.x/higher image.
-    set_default("midway_system_image", "nxos.9.3.14.bin")
-    set_default("midway_kickstart_image", "")
+
+    #set_default("midway_kickstart_image", "")
     #set_default("skip_multi_level", False)
     # --- USB related settings ---
     # USB slot info. By default its USB slot 1, if not specified specifically.
@@ -245,15 +191,15 @@ def set_defaults_and_validate_options():
 
     set_default("vrf", os.environ['POAP_VRF'])
     set_default("destination_config", "poap_conf.cfg")
-    set_default("split_config_first", "poap_1.cfg")
-    set_default("split_config_second", "poap_2.cfg")
+    #set_default("split_config_first", "poap_1.cfg")
+    #set_default("split_config_second", "poap_2.cfg")
 
     # Timeout info (in seconds)
     # Not applicable for TFTP protocol. POAP script timeout can help
     # in the case of TFTP.
     set_default("timeout_config", 120)  # 2 minutes
     set_default("timeout_copy_system", 2100)  # 35 minutes
-    set_default("timeout_copy_kickstart", 900)  # 15 minutes
+    #set_default("timeout_copy_kickstart", 900)  # 15 minutes
     set_default("timeout_copy_personality", 900)  # 15 minutes
 
     # Personality
@@ -412,16 +358,16 @@ def init_globals():
     log_hdl = None
     syslog_prefix = ""
     # indicates whether first config file is empty or not
-    empty_first_file = 1
+    #empty_first_file = 1
     # flag to indicate single or dual image
-    single_image = True
+    #single_image = True
     # flag to indicate whether or not we need to load intermediate images to get to our target
-    multi_step_install = False
+    multi_step_install = False # This is set to true if we have multiple upgrades required to get to where we want
 
     # confirm image deletion
     del_system_image = False
     # confirm image deletion
-    del_kickstart_image = True
+    #del_kickstart_image = True
 
 
 def format_mac(syslog_mac=""):
@@ -2358,8 +2304,7 @@ def setup_mode():
     """
     Sets the config file name based on the mode
     """
-    supported_modes = ["location", "serial_number", "mac", "hostname",
-                       "personality", "raw"]
+    supported_modes = ["location", "serial_number", "mac", "hostname", "personality", "raw"]
     if options["mode"] == "location":
         set_cfg_file_location()
         options["serial_number"] = os.environ['POAP_SERIAL']
@@ -2387,14 +2332,10 @@ def setup_logging():
     Configures the log file this script uses
     """
     global log_hdl
+    usb_mode = "usb_" if os.environ.get("POAP_PHASE", None) == "USB" else ""
 
-    if os.environ.get("POAP_PHASE", None) == "USB":
-        poap_script_log = "/bootflash/%s_poap_%s_usb_script.log" % (
-                                                              strftime("%Y%m%d%H%M%S", gmtime()),
-                                                              os.environ['POAP_PID'])
-    else:
-        poap_script_log = "/bootflash/%s_poap_%s_script.log" % (strftime("%Y%m%d%H%M%S", gmtime()),
-                                                                os.environ['POAP_PID'])
+    poap_script_log = "/bootflash/%s_poap_%s_%sscript.log" % (strftime("%Y%m%d%H%M%S", gmtime()), os.environ['POAP_PID'], usb_mode)
+
     log_hdl = open(poap_script_log, "w+")
 
     poap_log("Logfile name: %s" % poap_script_log)
@@ -2514,10 +2455,14 @@ def main():
     poap_log("This switch has the following IP address(es):")
     
     IP_addresses = show_IP_addresses.split('\n')
-    index = 0
-    while index < len(IP_addresses):
-        poap_log(IP_addresses[index])
-        index += 1
+
+    # index = 0
+    # while index < len(IP_addresses):
+    #     poap_log(IP_addresses[index])
+    #     index += 1
+    
+    for IP in IP_addresses:
+        poap_log(IP)
         
     poap_log(show_DNS)
     poap_log("This switch has hostname: " + show_hostname)
