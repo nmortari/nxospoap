@@ -332,14 +332,14 @@ def rollback_rpm_license_certificates():
     if(len(standby) > 0):
         os.system("rm -rf /bootflash_sup-remote/poap_files") 
 
-def abort(msg=None):
+def abort(error_message=None):
     """
     Aborts the POAP script execution with an optional message.
     """
     global log_hdl
 
-    if msg != None:
-        poap_log(msg)
+    if error_message != None:
+        poap_log(error_message)
     
     rollback_rpm_license_certificates()
     cleanup_files()
@@ -2358,6 +2358,21 @@ def cleanup_temp_images():
         midway_system = os.path.join(options["destination_path"], options["upgrade_system_image"])
         remove_file(midway_system)
 
+def erase_configuration():
+    """
+    Erases the startup configuration on the switch. This must be run before beginning the NX-OS
+    installation. The "install all" command cannot be run if there are configuration incompatibilities
+    with the target OS version (this allows this script to downgrade the OS) or if "boot poap" has
+    been set to enabled.
+    """
+    try:
+        cli("terminal dont-ask ; write erase")
+        time.sleep(5)
+        poap_log("Startup configuration has been successfully erased")
+    except Exception as e:
+        poap_log("Unable to erase startup configuration!")
+        abort(str(e))
+
 
 def main():
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -2402,14 +2417,22 @@ def main():
     
     #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
     
-    show_os_version = cli('show version | i "System version"')
+    erase_configuration()
+
     show_switch_model = cli("show module | grep N9K | head lines 1 | tr ' ' '\n' | grep N9K")
+    show_bios_version = cli("show version | i 'BIOS: version' | tr ' ' '\n' | sed -n '5p'")
+    show_bios_date = cli("show version | i 'BIOS compile time:' | tr ' ' '\n' | sed -n '7p'")
+    show_os_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
+    show_os_date = cli("show version | i 'NXOS compile time' | tr ' ' '\n' | sed -n '7p'")
     show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
     show_hostname = cli("show hostname")
     show_DNS = cli('show hosts | grep "Name servers"')
-    
-    poap_log("This switch is currently running NX-OS " + show_os_version)
-    poap_log("This switch is model: " + show_switch_model)
+
+    poap_log("System model: " + show_switch_model)
+    poap_log("System BIOS version: " + show_bios_version)
+    poap_log("System BIOS built on: "+ show_bios_date)
+    poap_log("System NX-OS version: " + show_os_version)
+    poap_log("System NX-OS version built on: " + show_os_date)
     poap_log("This switch has the following IP address(es):")
     
     IP_addresses = show_IP_addresses.split('\n')
@@ -2440,12 +2463,6 @@ def main():
     elif upgrade_set == True:
         copy_config()
 
-    # In two step install we just copy the midway image and reboot.
-    # Config copy and script download happens in the final OS installation step.
-    #if multi_step_install == False:
-        #copy_config()
-
-
     if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
         validate_yaml_file()
         copy_poap_files()
@@ -2458,9 +2475,6 @@ def main():
         copy_standby_files()
         
     copy_system()
-
-    #if single_image == False:
-    #    copy_kickstart()
 
     signal.signal(signal.SIGTERM, sig_handler_no_exit)
     # install images
