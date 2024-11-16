@@ -2055,7 +2055,9 @@ def get_currently_booted_image_filename():
     """
     Uses the CLI to run "show version" and then filter the output to get the currently booted NX-OS filename.
     """
-    nxos_filename = 1
+
+    global nxos_filename
+
     try:
         nxos_filename = cli("show version | i 'NXOS image file' | tr '///' '\n' | sed -n '4p'")
         poap_log("Currently booted filename is: " + nxos_filename)
@@ -2283,7 +2285,7 @@ def verify_current_switch_os_is_in_upgrade_path():
     This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
     """
 
-    global switch_os_is_in_upgrade_path, switch_os_is_in_upgrade_path
+    global switch_os_is_in_upgrade_path, nxos_filename, options
 
     if nxos_filename in options["upgrade_path"]:
         switch_os_is_in_upgrade_path = True
@@ -2322,6 +2324,9 @@ def get_bios_date():
         abort(str(e))
 
 def main():
+    
+    global nxos_filename
+
     signal.signal(signal.SIGTERM, sigterm_handler)
     
     # Set all the default parameters and validate the ones provided
@@ -2363,6 +2368,17 @@ def main():
     
     
     #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
+
+    get_switch_model()
+    get_version()
+    get_bios_version()
+    get_currently_booted_image_filename()
+
+    poap_log("This switch has the following IP address(es):")
+    
+    IP_addresses = show_IP_addresses.split('\n')
+    for IP in IP_addresses:
+        poap_log(IP)
     
     verify_current_switch_os_is_in_upgrade_path()
 
@@ -2385,11 +2401,7 @@ def main():
     #poap_log("System BIOS built on: "+ show_bios_date)
     #poap_log("System NX-OS version: " + show_os_version)
     #poap_log("System NX-OS version built on: " + show_os_date)
-    poap_log("This switch has the following IP address(es):")
-    
-    IP_addresses = show_IP_addresses.split('\n')
-    for IP in IP_addresses:
-        poap_log(IP)
+
         
     #poap_log(show_DNS)
     #poap_log("This switch has hostname: " + show_hostname)
