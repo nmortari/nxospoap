@@ -120,6 +120,17 @@ global_use_kstack = False
 global_upgrade_bios = False
 global_copy_image = True
 
+switch_os_is_in_upgrade_path = False
+switch_model = ""
+bios_version = ""
+bios_date = ""
+nxos_filename = "asdf"
+nxos_version = ""
+nxos_date = ""
+hostname = ""
+
+
+
 def set_defaults_and_validate_options():
     """
     Sets all the default values and creates needed variables for POAP to work.
@@ -362,17 +373,17 @@ def init_globals():
     global empty_first_file, single_image
     global valid_options, switch_os_is_in_upgrade_path
     global delete_system_image, del_kickstart_image
-    global switch_model, bios_version, bios_date, nxos_filename, nxos_version, nxos_date, hostname
+    global switch_model, bios_version, bios_date, nxos_version, nxos_date, hostname
 
     #Initialize the upgrade variable as false before verifying that the script should do anything to this switch
-    switch_os_is_in_upgrade_path = False
-    switch_model = ""
-    bios_version = ""
-    bios_date = ""
-    nxos_filename = ""
-    nxos_version = ""
-    nxos_date = ""
-    hostname = ""
+    #s
+    #switch_model = ""
+    #bios_version = ""
+    #bios_date = ""
+    #nxos_filename = ""
+    #nxos_version = ""
+    #nxos_date = ""
+    #hostname = ""
 
     # A list of valid options
     valid_options = set(["username", "password", "hostname"])
@@ -2285,14 +2296,23 @@ def verify_current_switch_os_is_in_upgrade_path():
     This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
     """
 
-    global switch_os_is_in_upgrade_path, nxos_filename, options
+    global switch_os_is_in_upgrade_path
+    global nxos_filename
+    global options
 
-    if nxos_filename in options["upgrade_path"]:
+    poap_log("nxos filename issssssssss:" + nxos_filename)
+    poap_log("upgrade path isssssssss:" + str(options["upgrade_path"][0]))
+
+    a = str(nxos_filename)
+    b = str(str(options["upgrade_path"][0]))
+
+    #if nxos_filename in str(options["upgrade_path"]):
+    if a in b:
         switch_os_is_in_upgrade_path = True
         poap_log("The current NX-OS version was found in the upgrade path!")
         poap_log("the POAP script will continue!")
     else:
-        poap_log("The current NX-OS version is not part of the upgrade path!")
+        #poap_log("The current NX-OS version is not part of the upgrade path!")
         abort("The current NX-OS version is not part of the upgrade path!")
 
 def get_switch_model():
@@ -2304,7 +2324,7 @@ def get_switch_model():
     
     try:
         switch_model = cli("show module | sed -n '3p' | sed -n 's/.*\b\(N9K[^ ]*\).*/\1/p'")
-        poap_log("System model : " + switch_model)
+        poap_log("System model: " + switch_model)
     except Exception as e:
         poap_log("Unable to detect system model!")
         abort(str(e))
@@ -2324,8 +2344,6 @@ def get_bios_date():
         abort(str(e))
 
 def main():
-    
-    global nxos_filename
 
     signal.signal(signal.SIGTERM, sigterm_handler)
     
