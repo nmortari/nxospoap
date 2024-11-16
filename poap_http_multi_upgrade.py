@@ -102,7 +102,7 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.09.3.9.bin", "nxos.09.3.10.bin", "nxos64-cs.010.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.09.3.10.bin", "nxos64-cs.010.3.4a.M.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -1900,8 +1900,10 @@ def get_version(option=0):
     Gets the image version of the switch from CLI using "show version" and then filtering the output.     
     """
 
+    global nxos_version
+
     try:
-        nxos_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
+        nxos_version = cli("show version | i 'NXOS: version' | head lines 1 | sed 's/.*version //'")
         poap_log("System NX-OS version: " + nxos_version)
     except Exception as e:
         poap_log("Unable to detect system NX-OS version!")
@@ -1909,11 +1911,13 @@ def get_version(option=0):
 
 def get_bios_version():
     """
-    Gets the BIOS version of the switch from CLI.
+    Runs "show version" and then filters it to get the BIOS version.
     """
 
+    global bios_version
+
     try:
-        bios_version = cli("show version | i 'BIOS: version' | tr ' ' '\n' | sed -n '5p'")
+        bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
         poap_log("System BIOS version: " + bios_version)
     except Exception as e:
         poap_log("Unable to detect system BIOS version!")
@@ -2271,7 +2275,7 @@ def erase_configuration():
         poap_log("Startup configuration has been successfully erased")
     except Exception as e:
         poap_log("Unable to erase startup configuration!")
-        abort("Unable to erase startup configuration!")
+        abort(str(e))
 
 def verify_current_switch_os_is_in_upgrade_path():
     """
@@ -2279,12 +2283,43 @@ def verify_current_switch_os_is_in_upgrade_path():
     This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
     """
 
-    if switch_os_is_in_upgrade_path in options["upgrade_path"]:
+    global switch_os_is_in_upgrade_path, switch_os_is_in_upgrade_path
+
+    if nxos_filename in options["upgrade_path"]:
         switch_os_is_in_upgrade_path = True
+        poap_log("The current NX-OS version was found in the upgrade path!")
+        poap_log("the POAP script will continue!")
     else:
         poap_log("The current NX-OS version is not part of the upgrade path!")
         abort("The current NX-OS version is not part of the upgrade path!")
 
+def get_switch_model():
+    """
+    Runs "show module" and the filters it to get the switch model.
+    """
+
+    global switch_model
+    
+    try:
+        switch_model = cli("show module | sed -n '3p' | sed -n 's/.*\b\(N9K[^ ]*\).*/\1/p'")
+        poap_log("System model : " + switch_model)
+    except Exception as e:
+        poap_log("Unable to detect system model!")
+        abort(str(e))
+
+def get_bios_date():
+    """
+    Runs "show version" and the filters it to get the BIOS version.
+    """
+
+    global bios_version
+    
+    try:
+        bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
+        poap_log("System BIOS version: " + bios_version)
+    except Exception as e:
+        poap_log("Unable to detect system BIOS version!")
+        abort(str(e))
 
 def main():
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -2329,32 +2364,35 @@ def main():
     
     #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
     
-    verify_switch_is_in_upgrade_path()
+    verify_current_switch_os_is_in_upgrade_path()
 
     erase_configuration()
 
-    show_switch_model = cli("show module | grep N9K | head lines 1 | tr ' ' '\n' | grep N9K")
-    show_bios_version = cli("show version | i 'BIOS: version' | tr ' ' '\n' | sed -n '5p'")
-    show_bios_date = cli("show version | i 'BIOS compile time:' | tr ' ' '\n' | sed -n '7p'")
-    show_os_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
-    show_os_date = cli("show version | i 'NXOS compile time' | tr ' ' '\n' | sed -n '7p'")
-    show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
-    show_DNS = cli('show hosts | grep "Name servers"')
-    show_hostname = cli("show hostname")
 
-    poap_log("System model: " + show_switch_model)
-    poap_log("System BIOS version: " + show_bios_version)
-    poap_log("System BIOS built on: "+ show_bios_date)
-    poap_log("System NX-OS version: " + show_os_version)
-    poap_log("System NX-OS version built on: " + show_os_date)
+    #NEED TO FINISH making the functions for htis part THIS PART
+
+    #show_switch_model = cli("show module | grep N9K | head lines 1 | tr ' ' '\n' | grep N9K")
+    #show_bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
+    #show_bios_date = cli("show version | i 'BIOS compile time:' | tr ' ' '\n' | sed -n '7p'")
+    #show_os_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
+    #show_os_date = cli("show version | i 'NXOS compile time' | tr ' ' '\n' | sed -n '7p'")
+    #show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
+    #show_DNS = cli('show hosts | grep "Name servers"')
+    #show_hostname = cli("show hostname")
+
+    #poap_log("System model: " + show_switch_model)
+    #poap_log("System BIOS version: " + show_bios_version)
+    #poap_log("System BIOS built on: "+ show_bios_date)
+    #poap_log("System NX-OS version: " + show_os_version)
+    #poap_log("System NX-OS version built on: " + show_os_date)
     poap_log("This switch has the following IP address(es):")
     
     IP_addresses = show_IP_addresses.split('\n')
     for IP in IP_addresses:
         poap_log(IP)
         
-    poap_log(show_DNS)
-    poap_log("This switch has hostname: " + show_hostname)
+    #poap_log(show_DNS)
+    #poap_log("This switch has hostname: " + show_hostname)
 
     # Verify there's enough space (and fail if not)
     verify_freespace()
