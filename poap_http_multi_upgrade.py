@@ -360,9 +360,19 @@ def init_globals():
     """
     global log_hdl, syslog_prefix
     global empty_first_file, single_image
-    global valid_options
+    global valid_options, switch_os_is_in_upgrade_path
     global delete_system_image, del_kickstart_image
     global switch_model, bios_version, bios_date, nxos_filename, nxos_version, nxos_date, hostname
+
+    #Initialize the upgrade variable as false before verifying that the script should do anything to this switch
+    switch_os_is_in_upgrade_path = False
+    switch_model = ""
+    bios_version = ""
+    bios_date = ""
+    nxos_filename = ""
+    nxos_version = ""
+    nxos_date = ""
+    hostname = ""
 
     # A list of valid options
     valid_options = set(["username", "password", "hostname"])
@@ -1572,7 +1582,6 @@ def copy_poap_files():
                 rpm_error = True
         if rpm_error:
             abort("Please correct the above rpm files in rpm source location and update YAML file accordingly.")
-  
     if ("Certificate" in dictionary):
         for cert in dictionary["Certificate"]:
             cert  = cert.strip()
@@ -1888,75 +1897,27 @@ def set_cfg_file_location():
 
 def get_version(option=0):
     """
-    Gets the image version of the switch from CLI.
-    Output is handled differently for 6.x and 7.x or higher version.
-    From Kerry onwards, releases are of 2 types: Feature and Maintenance. 
-    This changes the naming convention of the image. Release_type takes
-    care of this change.     
+    Gets the image version of the switch from CLI using "show version" and then filtering the output.     
     """
-    release_type = "" 
-    final_version = ""
 
-    cli_output = cli("show version")
-    if legacy:
-        result = re.search(r'system.*version\s*(.*)\n', cli_output[1])
-        if result != None:
-            return result.group(1)
-    else:
-        result = re.search(r'NXOS.*version\s*(.*)\n', cli_output)
-        #Line is of type NXOS: version <version>
-        if result != None and option != 1:
-           return result.group(1)
-        elif result != None:   
-           #This checks if the image if of intermediate type of CCO
-           #If 'build' is present, then it is of intermediate type
-            interim_result = result.group()
-            if 'Feature Release' in interim_result:
-                release_type = ".F"
-            elif 'Maintenance Release' in interim_result:
-                release_type = ".M" 
-            else:
-                release_type = ""
- 
-            if 'build' in interim_result:
-                # We are extracting our answer from the interim_result extracted so far
-                # Whatever we were extracting till now isn't enough
-                # This is an intermediate image, so our interim result is of form: nxos.9.4.1. [build 10.1.0.60.].bin
-                final_version = re.search(r'build.*', interim_result)
-                final_version = final_version.group()
-                final_version = final_version.replace('(', '.').replace(')', '.').replace(']', '').split()[1]
-                 
-                # Now, the form obtained if of the form 10.1.0.60, and it is a string. 
-                #return final_version        
-            else:
-                #This fetches the CCO image version
-                # interim_result is of form major.minor (patch version)
-                final_version = interim_result.replace('(', '.').replace(')', '')
-                final_version = final_version.split()[2]
-                #return final_version
-    
-    if final_version == "":
-        poap_log("Unable to get switch version")
-    else:
-        final_version  = final_version + release_type    
-    
-    return final_version 
+    try:
+        nxos_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
+        poap_log("System NX-OS version: " + nxos_version)
+    except Exception as e:
+        poap_log("Unable to detect system NX-OS version!")
+        abort(str(e))
 
 def get_bios_version():
     """
     Gets the BIOS version of the switch from CLI.
-    Output is handled differently for 6.x and 7.x/higher version.
     """
-    cli_output = cli("show version")
-    if legacy:
-        result = re.search(r'BIOS.*version\s*(.*)\n', cli_output[1])
-        if result != None:
-            return result.group(1)
-    else:
-        result = re.search(r'BIOS.*version\s*(.*)\n', cli_output)
-        if result != None:
-            return result.group(1)
-    poap_log("Unable to get switch Bios version")
+
+    try:
+        bios_version = cli("show version | i 'BIOS: version' | tr ' ' '\n' | sed -n '5p'")
+        poap_log("System BIOS version: " + bios_version)
+    except Exception as e:
+        poap_log("Unable to detect system BIOS version!")
+        abort(str(e))
 
 
 def install_bios():
@@ -2090,9 +2051,13 @@ def get_currently_booted_image_filename():
     """
     Uses the CLI to run "show version" and then filter the output to get the currently booted NX-OS filename.
     """
-
-    nxos_filename = cli(show version | i 'NXOS image file' | tr '///' '\n' | sed -n '4p')
-
+    nxos_filename = 1
+    try:
+        nxos_filename = cli("show version | i 'NXOS image file' | tr '///' '\n' | sed -n '4p'")
+        poap_log("Currently booted filename is: " + nxos_filename)
+    except Exception as e:
+        poap_log("Unable to detect currently booted NX-OS filename!")
+        abort(str(e))
 
 def set_next_upgrade_from_user():
     """
@@ -2306,7 +2271,19 @@ def erase_configuration():
         poap_log("Startup configuration has been successfully erased")
     except Exception as e:
         poap_log("Unable to erase startup configuration!")
-        abort(str(e))
+        abort("Unable to erase startup configuration!")
+
+def verify_current_switch_os_is_in_upgrade_path():
+    """
+    Verifies that the NX-OS version the switch is currently running is listed in the upgrade path.
+    This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
+    """
+
+    if switch_os_is_in_upgrade_path in options["upgrade_path"]:
+        switch_os_is_in_upgrade_path = True
+    else:
+        poap_log("The current NX-OS version is not part of the upgrade path!")
+        abort("The current NX-OS version is not part of the upgrade path!")
 
 
 def main():
@@ -2352,6 +2329,8 @@ def main():
     
     #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
     
+    verify_switch_is_in_upgrade_path()
+
     erase_configuration()
 
     show_switch_model = cli("show module | grep N9K | head lines 1 | tr ' ' '\n' | grep N9K")
