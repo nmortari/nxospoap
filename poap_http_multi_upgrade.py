@@ -2376,6 +2376,7 @@ def main():
 
     poap_log("This switch has the following IP address(es):")
     
+    show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
     IP_addresses = show_IP_addresses.split('\n')
     for IP in IP_addresses:
         poap_log(IP)
