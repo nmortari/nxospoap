@@ -102,7 +102,7 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "upgrade_path": ["nxos.09.3.9.bin", "nxos.09.3.10.bin", "nxos64-cs.010.3.4a.M.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -238,8 +238,7 @@ def validate_options():
     # Anything extra shouldn't be there
     invalid_options = supplied_options.difference(valid_options)
     for option in invalid_options:
-        poap_log("Invalid option detected: %s (check spelling, capitalization, and underscores)" %
-                 option)
+        poap_log("Invalid option detected: %s (check spelling, capitalization, and underscores)" % option)
     if len(invalid_options) > 0:
         abort()
 
@@ -360,25 +359,19 @@ def init_globals():
     Initializes all the global variables that are used in this POAP script
     """
     global log_hdl, syslog_prefix
-    global empty_first_file, single_image, multi_step_install
+    global empty_first_file, single_image
     global valid_options
-    global del_system_image, del_kickstart_image
+    global delete_system_image, del_kickstart_image
+    global switch_model, bios_version, bios_date, nxos_filename, nxos_version, nxos_date, hostname
 
     # A list of valid options
     valid_options = set(["username", "password", "hostname"])
     log_hdl = None
     syslog_prefix = ""
-    # indicates whether first config file is empty or not
-    #empty_first_file = 1
-    # flag to indicate single or dual image
-    #single_image = True
-    # flag to indicate whether or not we need to load intermediate images to get to our target
-    multi_step_install = False # This is set to true if we have multiple upgrades required to get to where we want
 
     # confirm image deletion
-    del_system_image = False
+    delete_system_image = False
     # confirm image deletion
-    #del_kickstart_image = True
 
 
 def format_mac(syslog_mac=""):
@@ -501,7 +494,7 @@ def cleanup_files():
     Cleanup all the POAP created files.
     """
     global options, log_hdl
-    global del_system_image, del_kickstart_image
+    global delete_system_image, del_kickstart_image
 
     poap_log("\n\nCleanup all files")
 
@@ -511,7 +504,7 @@ def cleanup_files():
     cleanup_file_from_option("split_config_first", True)
     cleanup_file_from_option("split_config_second", True)
     # Destination system or NXOS image
-    if del_system_image == True:
+    if delete_system_image == True:
         cleanup_file_from_option("destination_system_image")
     # Destination kickstart image
     if del_kickstart_image == True:
@@ -1199,7 +1192,7 @@ def copy_system():
     Copies system/nxos image and verifies if the md5 of the image matches
     with the value present in .md5 file downloaded.
     """
-    global del_system_image
+    global delete_system_image
     md5_sum_given = None
   
             
@@ -1229,7 +1222,7 @@ def copy_system():
                 stored in destination_system_image with upgrade_system_image.
                 """
                 #options["destination_system_image"] = options["upgrade_system_image"]
-                del_system_image = False
+                delete_system_image = False
                 return
         elif not md5_sum_given:
             abort("Invalid MD5 from server: %s" % md5_sum_given)
@@ -1254,7 +1247,7 @@ def copy_system():
         if not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
             abort("#### System file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
     poap_log("INFO: Completed Copy of System Image to %s" % os.path.join(options["destination_path"], org_file))
-    del_system_image = True
+    delete_system_image = True
 
 
 def copy_kickstart():
@@ -1408,13 +1401,6 @@ def install_images():
             time.sleep(retry_delay)
 
     poap_log("INFO: Configuration successful")
-
-    # if multi_step_install == True:
-    #     cli("config terminal ; terminal dont-ask ; write erase")
-    #     poap_log("Midway image copy/setting done")
-    #     exit(0)
-    # else:
-    #     poap_log("Multi-level install not set, installed images")
 
 #Procedure to intall using ISSU install command
 def install_issu():
@@ -2101,26 +2087,11 @@ def find_upgrade_index_from_match(image_info):
 
 
 def get_currently_booted_image_filename():
-    match = None
-    if legacy:
-        try:
-            output = cli("show version")[1]
-        except Exception as e:
-            abort("Show version failed: %s" % str(e))
+    """
+    Uses the CLI to run "show version" and then filter the output to get the currently booted NX-OS filename.
+    """
 
-        match = re.search("system image file is:\s+(.+)", output)
-    else:
-        try:
-            output = cli("show version")
-        except Exception as e:
-            abort("Show version failed: %s" % str(e))
-
-        match = re.search("NXOS image file is:\s+(.+)", output)
-
-    if match:
-        directory, image = os.path.split(match.group(1))
-        return image.strip()
-    return ""
+    nxos_filename = cli(show version | i 'NXOS image file' | tr '///' '\n' | sed -n '4p')
 
 
 def set_next_upgrade_from_user():
@@ -2128,7 +2099,6 @@ def set_next_upgrade_from_user():
     Forces a multi step upgrade if initiated by the user. We first check if we're currently on the
     final image, and if not, we make that the next image we're going to boot into.
     """
-    global multi_step_install
 
     current_image_file = get_currently_booted_image_filename()
     poap_log("Current image file has been set as: " + current_image_file)
@@ -2136,41 +2106,6 @@ def set_next_upgrade_from_user():
     if options["target_system_image"] == current_image_file:
         poap_log("This switch is already on the final target image")
         return
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # The currently booted image file is not the midway destination file. That means
-    # that we did not already do the midway step, and we need to go there next
-    if options["destination_midway_system_image"] != current_image_file:
-        poap_log("Destination midway image %s is not currently booted (%s)" %
-                 (options["destination_midway_system_image"], current_image_file))
-
-        #options["target_kickstart_image"] = options["midway_kickstart_image"]
-        options["target_system_image"] = options["midway_system_image"]
-
-        version = get_version()
-        poap_log("Next upgrade is to %s from %s (forced by user)" %
-                 (options["midway_system_image"], version))
-
-        # Keep overwriting midway images
-        #options["destination_kickstart_image"] = options["destination_midway_kickstart_image"]
-        options["destination_system_image"] = options["destination_midway_system_image"]
-        multi_step_install = True
-    else:
-        poap_log("Already on the midway image, upgrading to %s next." %
-                 options["target_system_image"])
 
 
 def set_next_upgrade_from_upgrade_path():
@@ -2425,8 +2360,8 @@ def main():
     show_os_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
     show_os_date = cli("show version | i 'NXOS compile time' | tr ' ' '\n' | sed -n '7p'")
     show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
-    show_hostname = cli("show hostname")
     show_DNS = cli('show hosts | grep "Name servers"')
+    show_hostname = cli("show hostname")
 
     poap_log("System model: " + show_switch_model)
     poap_log("System BIOS version: " + show_bios_version)
