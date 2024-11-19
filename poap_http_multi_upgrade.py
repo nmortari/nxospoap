@@ -523,8 +523,8 @@ def cleanup_files():
     # Destination config
     cleanup_file_from_option("destination_config")
     # Temporary split configs
-    cleanup_file_from_option("split_config_first", True)
-    cleanup_file_from_option("split_config_second", True)
+    #cleanup_file_from_option("split_config_first", True)
+    #cleanup_file_from_option("split_config_second", True)
     # Destination system or NXOS image
     if delete_system_image == True:
         cleanup_file_from_option("destination_system_image")
@@ -673,7 +673,7 @@ def split_config_file():
     single_image = True
 
     config_file = open(os.path.join(options["destination_path"], options["destination_config"]), "r")
-    config_file_first = open(os.path.join("/bootflash", options["split_config_first"]), "w+")
+    #config_file_first = open(os.path.join("/bootflash", options["split_config_first"]), "w+")
     config_file_second = open(os.path.join("/bootflash", options["split_config_second"]), "w+")
     
     split_config_is_not_needed = True
@@ -807,10 +807,10 @@ def split_config_file():
 
     config_file.close()
     remove_file(os.path.join(options["destination_path"], options["destination_config"]))
-    config_file_first.close()
-    if empty_first_file == 1:
-        remove_file(os.path.join(options["destination_path"], options["split_config_first"]))
-    config_file_second.close()
+    #config_file_first.close()
+    #if empty_first_file == 1:
+        #remove_file(os.path.join(options["destination_path"], options["split_config_first"]))
+    #config_file_second.close()
 
 
 def md5sum(filename):
