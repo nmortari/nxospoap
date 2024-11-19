@@ -124,10 +124,11 @@ switch_os_is_in_upgrade_path = False
 switch_model = ""
 bios_version = ""
 bios_date = ""
-nxos_filename = "asdf"
+nxos_filename = ""
 nxos_version = ""
 nxos_date = ""
 hostname = ""
+DNS = ""
 
 
 
@@ -1906,7 +1907,7 @@ def set_cfg_file_location():
     poap_log("Selected conf file name : %s" % options["source_config_file"])
 
 
-def get_version(option=0):
+def get_nxos_version(option=0):
     """
     Gets the image version of the switch from CLI using "show version" and then filtering the output.     
     """
@@ -1915,10 +1916,28 @@ def get_version(option=0):
 
     try:
         nxos_version = cli("show version | i 'NXOS: version' | head lines 1 | sed 's/.*version //'")
+        nxos_version = nxos_version.strip('\n')
         poap_log("System NX-OS version: " + nxos_version)
     except Exception as e:
         poap_log("Unable to detect system NX-OS version!")
         abort(str(e))
+
+def get_nxos_date():
+    """
+    Gets the date of the NX-OS version from CLI using "show version" and then filtering the output.     
+    """
+
+    global nxos_date
+
+    try:
+        nxos_date = cli("show version | i 'NXOS compile time: '")
+        nxos_date = nxos_date.strip('\n')
+        nxos_date = nxos_date.split(" ")
+        poap_log("System NX-OS version date: " + nxos_date[6])
+    except Exception as e:
+        poap_log("Unable to detect system NX-OS version date!")
+        abort(str(e))
+
 
 def get_bios_version():
     """
@@ -1929,6 +1948,7 @@ def get_bios_version():
 
     try:
         bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
+        bios_version = bios_version.strip('\n')
         poap_log("System BIOS version: " + bios_version)
     except Exception as e:
         poap_log("Unable to detect system BIOS version!")
@@ -2071,6 +2091,7 @@ def get_currently_booted_image_filename():
 
     try:
         nxos_filename = cli("show version | i 'NXOS image file' | tr '///' '\n' | sed -n '4p'")
+        nxos_filename = nxos_filename.strip('\n')
         poap_log("Currently booted filename is: " + nxos_filename)
     except Exception as e:
         poap_log("Unable to detect currently booted NX-OS filename!")
@@ -2098,20 +2119,21 @@ def set_next_upgrade_from_upgrade_path():
     override the upgrade that is used if we detect that we need to follow the upgrade path.
     """
     global options
+    global nxos_filename
 
-    poap_log("WE ARE IN THE NEXT UPGRADE PATH FUNCTION")
+    #poap_log("WE ARE IN THE NEXT UPGRADE PATH FUNCTION")
     
-    current_image_file = get_currently_booted_image_filename()
-    poap_log("The currently running image file is : " + current_image_file)
+    #current_image_file = get_currently_booted_image_filename()
+    #poap_log("The currently running image file is : " + current_image_file)
 
-    if options["upgrade_path"][-1] == current_image_file:
+    if options["upgrade_path"][-1] == nxos_filename:
         poap_log("This switch is already on the final target image")
         return None
     # look at everything except the final image in the upgrade path
-    if current_image_file in options["upgrade_path"][:-1]:
-        next_image_index = options["upgrade_path"].index(current_image_file) + 1
+    if nxos_filename in options["upgrade_path"][:-1]:
+        next_image_index = options["upgrade_path"].index(nxos_filename) + 1
         options["upgrade_system_image"] = options["upgrade_path"][next_image_index]
-        poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], current_image_file))
+        poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], nxos_filename))
         # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
     
@@ -2300,14 +2322,16 @@ def verify_current_switch_os_is_in_upgrade_path():
     global nxos_filename
     global options
 
-    poap_log("nxos filename issssssssss:" + nxos_filename)
-    poap_log("upgrade path isssssssss:" + str(options["upgrade_path"][0]))
+    #poap_log("nxos filename issssssssss:" + nxos_filename)
+    #poap_log("upgrade path isssssssss:" + str(options["upgrade_path"][0]))
 
-    a = str(nxos_filename)
-    b = str(str(options["upgrade_path"][0]))
+    #nxos = str(nxos_filename)
+    #upgrade_list = str(str(options["upgrade_path"][0]))
+    
+    #upgrade_list = str(options["upgrade_path"][0])
 
     #if nxos_filename in str(options["upgrade_path"]):
-    if a in b:
+    if nxos_filename in options["upgrade_path"]:
         switch_os_is_in_upgrade_path = True
         poap_log("The current NX-OS version was found in the upgrade path!")
         poap_log("the POAP script will continue!")
@@ -2321,9 +2345,18 @@ def get_switch_model():
     """
 
     global switch_model
+    cli_output = ""
+    N9K_index = None
     
     try:
-        switch_model = cli("show module | sed -n '3p' | sed -n 's/.*\b\(N9K[^ ]*\).*/\1/p'")
+        cli_output = cli("show module | sed -n '3p'")
+        cli_output = cli_output.strip('\n')
+        cli_output = cli_output.split(" ")
+
+        N9K_index = [i for i, string in enumerate(cli_output) if "N9K" in string][0]
+
+        switch_model = cli_output[N9K_index]
+
         poap_log("System model: " + switch_model)
     except Exception as e:
         poap_log("Unable to detect system model!")
@@ -2334,16 +2367,34 @@ def get_bios_date():
     Runs "show version" and the filters it to get the BIOS version.
     """
 
-    global bios_version
+    global bios_date
     
     try:
-        bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
-        poap_log("System BIOS version: " + bios_version)
+        bios_date = cli("show version | i 'BIOS compile time: ' | sed 's/.*:  //'")
+        bios_date = bios_date.strip('\n')
+        poap_log("System BIOS version date: " + bios_date)
     except Exception as e:
-        poap_log("Unable to detect system BIOS version!")
+        poap_log("Unable to detect system BIOS version date!")
+        abort(str(e))
+
+def get_DNS():
+    """
+    Runs "show hosts" and the filters it to get the DNS list.
+    """
+
+    global DNS
+    
+    try:
+        DNS = cli("show hosts | i 'Name servers' | sed 's/.*: //'")
+        DNS = DNS.strip('\n')
+        poap_log("Domain name server(s): " + DNS)
+    except Exception as e:
+        poap_log("Unable to detect domain name servers!")
         abort(str(e))
 
 def main():
+
+    global options
 
     signal.signal(signal.SIGTERM, sigterm_handler)
     
@@ -2388,8 +2439,10 @@ def main():
     #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
 
     get_switch_model()
-    get_version()
+    get_nxos_version()
+    get_nxos_date()
     get_bios_version()
+    get_bios_date()
     get_currently_booted_image_filename()
 
     poap_log("This switch has the following IP address(es):")
@@ -2398,6 +2451,8 @@ def main():
     IP_addresses = show_IP_addresses.split('\n')
     for IP in IP_addresses:
         poap_log(IP)
+    
+    get_DNS()
     
     verify_current_switch_os_is_in_upgrade_path()
 
@@ -2431,8 +2486,6 @@ def main():
     # Now that we know we're going to try and copy, let's create
     # the directory structure needed, if any
     create_destination_directories()
-
-    poap_log("The install path is: " + options["install_path"])
 
     # We are not using this option
     if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
