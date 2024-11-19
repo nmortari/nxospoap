@@ -102,12 +102,22 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.109.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
    "https_ignore_certificate": False,
    "disable_md5": False,
+   # This option can be used to restrict the script to only affect switches that are explicitly in the upgrade path.
+   # This can be set to false to allow downgrades.
+
+   # Example-1: If you have all leaf switches on 9.3.9, and all spine switches on 9.3.10, and you ONLY want to
+   # upgrade the spines, you would set this to True and set your upgrade path to start at 9.3.10.
+
+   # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
+   # as the only entry in your upgrade path.
+   "only_allow_versions_in_upgrade_path": False,
 }
 
 """
@@ -120,7 +130,7 @@ global_use_kstack = False
 global_upgrade_bios = False
 global_copy_image = True
 
-switch_os_is_in_upgrade_path = False
+#switch_os_is_in_upgrade_path = False
 switch_model = ""
 bios_version = ""
 bios_date = ""
@@ -230,6 +240,7 @@ def set_defaults_and_validate_options():
     set_default("source_tarball", "personality.tar")
     set_default("destination_tarball", options["source_tarball"])
     set_default("compact_image", False)
+    set_default("only_allow_versions_in_upgrade_path", options["only_allow_versions_in_upgrade_path"])
 
     # Check that options are valid
     validate_options()
@@ -372,7 +383,8 @@ def init_globals():
     """
     global log_hdl, syslog_prefix
     global empty_first_file, single_image
-    global valid_options, switch_os_is_in_upgrade_path
+    global valid_options
+    #switch_os_is_in_upgrade_path
     global delete_system_image, del_kickstart_image
     global switch_model, bios_version, bios_date, nxos_version, nxos_date, hostname
 
@@ -529,8 +541,8 @@ def cleanup_files():
     if delete_system_image == True:
         cleanup_file_from_option("destination_system_image")
     # Destination kickstart image
-    if del_kickstart_image == True:
-        cleanup_file_from_option("destination_kickstart_image")
+    #if del_kickstart_image == True:
+    #    cleanup_file_from_option("destination_kickstart_image")
     # Destination config
     cleanup_file_from_option("destination_config")
     os.system("rm -rf /bootflash/poap_files")
@@ -1124,7 +1136,7 @@ def copy_config():
     poap_log("This is just before the 2nd split config file")
     #split_config_file()
     
-    config_file = open(os.path.join(options["destination_path"], options["destination_config"]), "r")
+    config_file = os.path.join(options["destination_path"], poap_file)
     config_file = config_file.replace('/bootflash/', 'bootflash:', 1)
     poap_log("The config file path is: " + config_file)
     poap_log("Copying configuration file to startup configuration")
@@ -1133,10 +1145,12 @@ def copy_config():
     try:
         poap_log("Running command: copy %s startup-config" % config_file)
         cli("copy %s startup-config" % config_file)
+        time.sleep(5)
     except Exception as e:
         poap_log("Could not copy config to startup configuration!" % config_file)
         abort(str(e))
 
+    remove_file(config_file)
 
     poap_log("INFO: Completed copy of config file to %s" % os.path.join(options["destination_path"], poap_file))
 
@@ -2157,6 +2171,9 @@ def set_next_upgrade_from_upgrade_path():
         # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path.
         # This means we need to copy the configuration because this is the last upgrade we are doing.
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
+    else:
+        options["upgrade_system_image"] = options["upgrade_path"][0]
+        return True
     
     #poap_log("Image %s is not on the upgrade path" % nxos_filename)
     return None
@@ -2344,7 +2361,7 @@ def verify_current_switch_os_is_in_upgrade_path():
     This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
     """
 
-    global switch_os_is_in_upgrade_path
+    #global switch_os_is_in_upgrade_path
     global nxos_filename
     global options
 
@@ -2358,7 +2375,7 @@ def verify_current_switch_os_is_in_upgrade_path():
 
     #if nxos_filename in str(options["upgrade_path"]):
     if nxos_filename in options["upgrade_path"]:
-        switch_os_is_in_upgrade_path = True
+        #switch_os_is_in_upgrade_path = True
         poap_log("The current NX-OS version was found in the upgrade path!")
         poap_log("the POAP script will continue!")
     else:
@@ -2480,9 +2497,9 @@ def main():
     
     get_DNS()
     
-    verify_current_switch_os_is_in_upgrade_path()
+    if options["only_allow_versions_in_upgrade_path"] == True:
+        verify_current_switch_os_is_in_upgrade_path()
 
-    erase_configuration()
 
 
     #NEED TO FINISH making the functions for htis part THIS PART
@@ -2566,6 +2583,9 @@ def main():
     # poap_log("Done copying the second scheduled cfg")
     # remove_file(os.path.join("/bootflash", options["split_config_second"]))
     #if (options["use_nxos_boot"] == False):
+
+    erase_configuration()
+    
     install_nxos_issu()
 
     log_hdl.close()
