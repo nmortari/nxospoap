@@ -670,6 +670,7 @@ def split_config_file():
     res_temp_flag = 0
     res_flag_dontprint = 0
     skip_split_config = True
+    single_image = True
 
     config_file = open(os.path.join(options["destination_path"],
                                     options["destination_config"]), "r")
@@ -677,10 +678,12 @@ def split_config_file():
                                           options["split_config_first"]), "w+")
     config_file_second = open(os.path.join("/bootflash",
                                            options["split_config_second"]), "w+")
+    
+    split_config_is_not_needed = True
 
     # If we don't require extra reloads for commands (newer images), skip this
     # splitting of commands (and break the below loop immediately)
-    if split_config_not_needed():
+    if split_config_is_not_needed == True:
         config_file_second.write(config_file.read())
         line = ""
         poap_log("Skip split config as it isn't needed with %s" % options["target_system_image"])
