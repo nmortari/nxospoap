@@ -665,7 +665,7 @@ def split_config_file():
     File1: Contains lines of config that require switch reboot.
     File2: Contains lines of config that doesn't require switch reboot
     """
-    poap_log("Split Config file")
+    poap_log("Split Config file function")
     global empty_first_file, log_hdl, single_image, res_temp_flag, res_flag_dontprint
     res_temp_flag = 0
     res_flag_dontprint = 0
@@ -674,7 +674,7 @@ def split_config_file():
 
     config_file = open(os.path.join(options["destination_path"], options["destination_config"]), "r")
     #config_file_first = open(os.path.join("/bootflash", options["split_config_first"]), "w+")
-    config_file_second = open(os.path.join("/bootflash", options["split_config_second"]), "w+")
+    #config_file_second = open(os.path.join("/bootflash", options["split_config_second"]), "w+")
     
     split_config_is_not_needed = True
 
@@ -862,7 +862,8 @@ def verify_md5(md5given, filename):
         file_size = "Unknown"
 
     poap_log("Verifying MD5 checksum of %s (size %s)" % (filename, file_size))
-    poap_log(" md5given = %s md5calculated = %s" % (md5given, md5calculated))
+    poap_log("MD5 given: " + md5given)
+    poap_log("MD5 calculated: " + md5calculated)
     if md5given == md5calculated:
         poap_log("MD5 match for file = {0}".format(filename))
         return True
@@ -1067,7 +1068,7 @@ def copy_md5_info(file_path, file_name):
         file_path: Directory where .md5 file resides
         file_name: Name of the .md5 file
     """
-    poap_log("Copying MD5 information")
+    poap_log("Downloading MD5 information from remote source")
 
     md5_file_name = "%s.md5" % file_name
     if os.path.exists(os.path.join(options["destination_path"], md5_file_name)):
@@ -1076,7 +1077,7 @@ def copy_md5_info(file_path, file_name):
     tmp_file = "%s.tmp" % md5_file_name
     timeout = options["timeout_config"]
     src = os.path.join(file_path, md5_file_name)
-    poap_log("Starting Copy of MD5. src = %s dest = %s" % (
+    poap_log("Starting Copy of MD5 from: %s to: %s" % (
                  src, os.path.join(options["destination_path"], md5_file_name)))
     if os.environ['POAP_PHASE'] != "USB":
         poap_log("File transfer_protocol = %s" % options["transfer_protocol"])
@@ -1090,49 +1091,54 @@ def copy_md5_info(file_path, file_name):
 
 def copy_config():
     """
-    Copies the configuration from the USB device or remote server to the switch
-    If the mode is personality, the configuration is actually inside the tarball,
-    so we skip copying any config from USB or the server at this point of execution
-    """
-    if options["mode"] != "personality":
-        copy_remote_config()
-
-
-def copy_remote_config():
-    """
     Copies switch configuration file and verifies if the md5 of the config
     matches with the value present in .md5 file downloaded.
     """
-    poap_log("Copying config file")
-    global empty_first_file
+    poap_log("Starting copy of configuration file")
+
     global options
 
-    org_file = options["destination_config"]
+    poap_file = options["destination_config"]
     if options["disable_md5"] == False:
         copy_md5_info(options["config_path"], options["source_config_file"])
         md5_sum_given = get_md5(options["source_config_file"])
-        remove_file(os.path.join(options["destination_path"], "%s.md5" %
-                                 options["source_config_file"]))
-        if md5_sum_given and os.path.exists(os.path.join(options["destination_path"], org_file)):
-            if verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
-                poap_log("File %s already exists and MD5 matches" %
-                         os.path.join(options["destination_path"], org_file))
+        remove_file(os.path.join(options["destination_path"], "%s.md5" % options["source_config_file"]))
+        if md5_sum_given and os.path.exists(os.path.join(options["destination_path"], poap_file)):
+            if verify_md5(md5_sum_given, os.path.join(options["destination_path"], poap_file)):
+                #This isn't running
+                poap_log("File %s already exists and MD5 matches" % os.path.join(options["destination_path"], poap_file))
                 split_config_file()
                 return
         elif not md5_sum_given:
             poap_log("MD5 sum given is invalid: %s" % md5_sum_given)
-    poap_log("INFO: Starting Copy of Config File to %s" % os.path.join(options["destination_path"], org_file))
-    tmp_file = "%s.tmp" % org_file
+    poap_log("Starting Copy of configuration file to: %s" % os.path.join(options["destination_path"], poap_file))
+    tmp_file = "%s.tmp" % poap_file
     timeout = options["timeout_config"]
     src = os.path.join(options["config_path"], options["source_config_file"])
 
-    do_copy(src, org_file, timeout, tmp_file)
+    do_copy(src, poap_file, timeout, tmp_file)
 
     if options["disable_md5"] == False:
-        if md5_sum_given and not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
-            abort("#### config file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
-    split_config_file()
-    poap_log("INFO: Completed copy of config file to %s" % os.path.join(options["destination_path"], org_file))
+        if md5_sum_given and not verify_md5(md5_sum_given, os.path.join(options["destination_path"], poap_file)):
+            abort("#### config file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], poap_file))
+    poap_log("This is just before the 2nd split config file")
+    #split_config_file()
+    
+    config_file = open(os.path.join(options["destination_path"], options["destination_config"]), "r")
+    config_file = config_file.replace('/bootflash/', 'bootflash:', 1)
+    poap_log("The config file path is: " + config_file)
+    poap_log("Copying configuration file to startup configuration")
+    
+
+    try:
+        poap_log("Running command: copy %s startup-config" % config_file)
+        cli("copy %s startup-config" % config_file)
+    except Exception as e:
+        poap_log("Could not copy config to startup configuration!" % config_file)
+        abort(str(e))
+
+
+    poap_log("INFO: Completed copy of config file to %s" % os.path.join(options["destination_path"], poap_file))
 
 def is_image_cs_or_msll():
     
@@ -2148,7 +2154,8 @@ def set_next_upgrade_from_upgrade_path():
         next_image_index = options["upgrade_path"].index(nxos_filename) + 1
         options["upgrade_system_image"] = options["upgrade_path"][next_image_index]
         poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], nxos_filename))
-        # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path
+        # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path.
+        # This means we need to copy the configuration because this is the last upgrade we are doing.
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
     
     #poap_log("Image %s is not on the upgrade path" % nxos_filename)
@@ -2512,8 +2519,10 @@ def main():
     #check_multilevel_install()
 
     is_this_the_final_upgrade = set_next_upgrade_from_upgrade_path()
+    # If the switch is already on the final NX-OS version. There is nothing to do.
     if is_this_the_final_upgrade is None:
         abort("The script will exit now")
+    # If the switch is going to install the final upgrade, we need to copy the configuration.
     elif is_this_the_final_upgrade == True:
         poap_log("The configuration will now be copied because this is the final upgrade")
         copy_config()
