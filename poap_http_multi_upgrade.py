@@ -1378,8 +1378,8 @@ def install_nxos_issu():
     
     try:
         os.system("touch /tmp/poap_issu_started")
-        poap_log("terminal dont-ask ; install all nxos %s no-reload non-interruptive" % system_image_path)
-        cli("terminal dont-ask ; install all nxos %s no-reload non-interruptive" % system_image_path)
+        poap_log("terminal dont-ask ; install all nxos %s non-interruptive" % system_image_path)
+        cli("terminal dont-ask ; install all nxos %s non-interruptive" % system_image_path)
         time.sleep(5)
         cli("terminal dont-ask ; write erase")
         time.sleep(5)
@@ -2310,6 +2310,10 @@ def erase_configuration():
     """
     try:
         cli("terminal dont-ask ; write erase")
+        time.sleep(5)
+        cli("config ; no boot poap enable")
+        time.sleep(5)
+        cli("copy running-config startup-config")
         time.sleep(5)
         poap_log("Startup configuration has been successfully erased")
     except Exception as e:
