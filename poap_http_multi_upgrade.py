@@ -1378,11 +1378,12 @@ def install_nxos_issu():
     
     try:
         os.system("touch /tmp/poap_issu_started")
+        poap_log("The script will run the following install command:")
         poap_log("terminal dont-ask ; install all nxos %s non-interruptive" % system_image_path)
         cli("terminal dont-ask ; install all nxos %s non-interruptive" % system_image_path)
         time.sleep(5)
-        cli("terminal dont-ask ; write erase")
-        time.sleep(5)
+        #cli("terminal dont-ask ; write erase")
+        #time.sleep(5)
     except Exception as e:
         poap_log(" This is running: Failed to ISSU to image %s" % system_image_path)
         os.system("rm -rf /tmp/poap_issu_started")
@@ -2313,6 +2314,7 @@ def erase_configuration():
         time.sleep(5)
         cli("config ; no boot poap enable")
         time.sleep(5)
+        # This must be run in order to save "no boot poap enable" to the supervisor startup configuration
         cli("copy running-config startup-config")
         time.sleep(5)
         poap_log("Startup configuration has been successfully erased")
@@ -2524,13 +2526,13 @@ def main():
     # install images
     #if single_image == False:
     #install_images()
-    if global_upgrade_bios:
-        install_issu()
-    elif options["use_nxos_boot"]:
-        install_images_7_x()
+    #if global_upgrade_bios:
+    #    install_issu()
+    #elif options["use_nxos_boot"]:
+    #    install_images_7_x()
 
     # Cleanup midway images if any
-    cleanup_temp_images()
+    #cleanup_temp_images()
 
     # Invoke personality restore if personality is enabled
     if options["mode"] == "personality":
@@ -2545,8 +2547,8 @@ def main():
     # cli('copy bootflash:%s scheduled-config' % options["split_config_second"])
     # poap_log("Done copying the second scheduled cfg")
     # remove_file(os.path.join("/bootflash", options["split_config_second"]))
-    if (options["use_nxos_boot"] == False):
-        install_nxos_issu()
+    #if (options["use_nxos_boot"] == False):
+    install_nxos_issu()
 
     log_hdl.close()
     exit(0)
