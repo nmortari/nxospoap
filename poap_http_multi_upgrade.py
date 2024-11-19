@@ -1367,7 +1367,10 @@ def install_nxos_issu():
        copying of image may not have happened, leading to failure in ISSU if name of
        the target image is different from the image that the switch is currently booted
        up with. 
-    ''' 
+    '''
+
+    global options
+
     if global_copy_image:
         system_image_path = os.path.join(options["destination_path"], options["upgrade_system_image"])
         system_image_path = system_image_path.replace("/bootflash/", "bootflash:", 1)
@@ -1376,6 +1379,13 @@ def install_nxos_issu():
         system_image_path = os.path.join("bootflash:",get_currently_booted_image_filename())
         poap_log("The currently booted image filename is: " + system_image_path)
     
+
+
+    if os.path.exists(os.path.join(options["destination_path"], options["upgrade_system_image"])):
+        poap_log("File %s was found on the bootflash" % os.path.join(options["destination_path"], options["upgrade_system_image"]))
+    else:
+        poap_log("File %s was not found on the bootflash! The installation cannot run." % os.path.join(options["destination_path"], options["upgrade_system_image"])
+
     try:
         os.system("touch /tmp/poap_issu_started")
         poap_log("The script will run the following install command:")
