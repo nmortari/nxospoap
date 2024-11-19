@@ -102,7 +102,7 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.09.3.10.bin", "nxos64-cs.010.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -283,7 +283,7 @@ def rollback_rpm_license_certificates():
         fpx = open("/bootflash/poap_files/success_install_list")
     except:
         return
-    version = get_version()
+    version = get_nxos_version()
     image_parts = [part for part in re.split("[\.()]", version) if part]
     rollback_files = fpx.readlines()
     for file in rollback_files:
@@ -927,6 +927,9 @@ def do_copy(source="", dest="", login_timeout=10, dest_tmp="", compact=False, do
     be USB or external server. Appropriate copy function is required
     based on whether the switch runs 6.x or 7.x or higher image.
     """
+    #NONE OF THE ERROR MESSAGES EVEN WORK IN THIS LOOP
+    #I NEED TO REWRITE THIS
+
     poap_log("Copying file options source=%s destination=%s "
              "login_timeout=%s destination_tmp=%s" % (source,
                                                       os.path.join(options["destination_path"],
@@ -966,7 +969,7 @@ def do_copy(source="", dest="", login_timeout=10, dest_tmp="", compact=False, do
             except Exception as e:
                 # Handle known cases
                 if "file not found" in str(e):
-                    abort("Copy failed: %s" % str(e))
+                    abort("Copy failed because the file was not found: %s" % str(e))
                 elif "Permission denied" in str(e):
                     abort("Copy of %s failed: permission denied" % source)
                 else:
@@ -1016,7 +1019,8 @@ def do_copy(source="", dest="", login_timeout=10, dest_tmp="", compact=False, do
                 elif "No space left on device" in str(e):
                     abort("Copy failed: No space left on device")
                 else:
-                    poap_log("Copy failed: %s" % str(e))
+                    # I NEED TO LOOK AT THIS AGAIN
+                    poap_log("OS copy failed %s" % str(e))
                     raise
 
     try:
@@ -1156,7 +1160,7 @@ def target_system_image_is_currently_running():
     /isan/bin/pfm file, however exception may occur there (since this is an internal file, 
     subject to change)  so no need to check using it when doing comparison.  
     """
-    version = get_version(1)
+    version = get_nxos_version(1)
     if legacy == False:
         image_parts = [part for part in re.split("[\.()]", version) if part]
         image_parts.insert(0, "nxos")
@@ -1380,7 +1384,7 @@ def install_nxos_issu():
         cli("terminal dont-ask ; write erase")
         time.sleep(5)
     except Exception as e:
-        poap_log("Failed to ISSU to image %s" % system_image_path)
+        poap_log(" This is running: Failed to ISSU to image %s" % system_image_path)
         os.system("rm -rf /tmp/poap_issu_started")
         abort(str(e))
 
@@ -1658,7 +1662,7 @@ def install_rpm():
     
     patch_count = 0
     activate_list = "committed_list = "
-    version = get_version()
+    version = get_nxos_version()
     image_parts = [part for part in re.split("[\.()]", version) if part]
     for file in os.listdir("/bootflash/poap_files"):
         if file.endswith(".rpm"):
@@ -1985,7 +1989,7 @@ def is_bios_upgrade_needed():
     """
     global single_image
     last_upgrade_bios = 3
-    ver = get_version()
+    ver = get_nxos_version()
     bios = get_bios_version()
     poap_log("Switch is running version %s with bios version %s"
              " image %s single_image %d" % (ver, bios, options["target_system_image"],
@@ -2137,7 +2141,7 @@ def set_next_upgrade_from_upgrade_path():
         # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
     
-    poap_log("Image %s is not on the upgrade path" % current_image_file)
+    #poap_log("Image %s is not on the upgrade path" % nxos_filename)
     return None
 
 
@@ -2492,11 +2496,11 @@ def main():
         parse_poap_yaml()
     #check_multilevel_install()
 
-    upgrade_set = set_next_upgrade_from_upgrade_path()
-    if upgrade_set is None:
-        log_hdl.close()
-        exit(0)
-    elif upgrade_set == True:
+    is_this_the_final_upgrade = set_next_upgrade_from_upgrade_path()
+    if is_this_the_final_upgrade is None:
+        abort("The script will exit now")
+    elif is_this_the_final_upgrade == True:
+        poap_log("The configuration will now be copied because this is the final upgrade")
         copy_config()
 
     if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
