@@ -669,7 +669,7 @@ def split_config_file():
     global empty_first_file, log_hdl, single_image, res_temp_flag, res_flag_dontprint
     res_temp_flag = 0
     res_flag_dontprint = 0
-    skip_split_config = False
+    skip_split_config = True
 
     config_file = open(os.path.join(options["destination_path"],
                                     options["destination_config"]), "r")
@@ -1105,6 +1105,8 @@ def copy_remote_config():
     """
     poap_log("Copying config file")
     global empty_first_file
+    global options
+
     org_file = options["destination_config"]
     if options["disable_md5"] == False:
         copy_md5_info(options["config_path"], options["source_config_file"])
@@ -1384,7 +1386,8 @@ def install_nxos_issu():
     if os.path.exists(os.path.join(options["destination_path"], options["upgrade_system_image"])):
         poap_log("File %s was found on the bootflash" % os.path.join(options["destination_path"], options["upgrade_system_image"]))
     else:
-        poap_log("File %s was not found on the bootflash! The installation cannot run." % os.path.join(options["destination_path"], options["upgrade_system_image"])
+        poap_log("File %s was not found on the bootflash! The installation cannot run." % os.path.join(options["destination_path"], options["upgrade_system_image"]))
+        abort("Exiting script")
 
     try:
         os.system("touch /tmp/poap_issu_started")
