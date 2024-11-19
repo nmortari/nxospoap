@@ -672,12 +672,9 @@ def split_config_file():
     skip_split_config = True
     single_image = True
 
-    config_file = open(os.path.join(options["destination_path"],
-                                    options["destination_config"]), "r")
-    config_file_first = open(os.path.join("/bootflash",
-                                          options["split_config_first"]), "w+")
-    config_file_second = open(os.path.join("/bootflash",
-                                           options["split_config_second"]), "w+")
+    config_file = open(os.path.join(options["destination_path"], options["destination_config"]), "r")
+    config_file_first = open(os.path.join("/bootflash", options["split_config_first"]), "w+")
+    config_file_second = open(os.path.join("/bootflash", options["split_config_second"]), "w+")
     
     split_config_is_not_needed = True
 
@@ -1124,8 +1121,7 @@ def copy_remote_config():
                 return
         elif not md5_sum_given:
             poap_log("MD5 sum given is invalid: %s" % md5_sum_given)
-    poap_log("INFO: Starting Copy of Config File to %s" % os.path.join(options["destination_path"],
-                                                                       org_file))
+    poap_log("INFO: Starting Copy of Config File to %s" % os.path.join(options["destination_path"], org_file))
     tmp_file = "%s.tmp" % org_file
     timeout = options["timeout_config"]
     src = os.path.join(options["config_path"], options["source_config_file"])
@@ -1133,13 +1129,10 @@ def copy_remote_config():
     do_copy(src, org_file, timeout, tmp_file)
 
     if options["disable_md5"] == False:
-        if md5_sum_given and not verify_md5(md5_sum_given,
-                                            os.path.join(options["destination_path"], org_file)):
-            abort("#### config file %s MD5 verification failed #####\n" % os.path.join(
-                         options["destination_path"], org_file))
+        if md5_sum_given and not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
+            abort("#### config file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
     split_config_file()
-    poap_log("INFO: Completed copy of config file to %s" %
-             os.path.join(options["destination_path"], org_file))
+    poap_log("INFO: Completed copy of config file to %s" % os.path.join(options["destination_path"], org_file))
 
 def is_image_cs_or_msll():
     
