@@ -102,8 +102,8 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   "upgrade_path": ["nxos.9.3.10.bin"],
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   #"upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -1141,11 +1141,11 @@ def copy_config():
     #poap_log(config_file_contents)
 
     try:
-        poap_log("Running command: copy %s startup-config" % config_file)
-        cli("copy %s startup-config" % config_file)
+        poap_log("Running command: copy %s startup-config" % config_file_with_colon)
+        cli("copy %s startup-config" % config_file_with_colon)
         time.sleep(5)
     except Exception as e:
-        poap_log("Could not copy configuration file to startup configuration!" % config_file)
+        poap_log("Could not copy configuration file to startup configuration!" % config_file_with_colon)
         abort(str(e))
 
     # Remove the configuration file after applying
