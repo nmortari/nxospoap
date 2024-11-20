@@ -102,8 +102,8 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   "upgrade_path": ["nxos.9.3.109.bin"],
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   #"upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -117,7 +117,7 @@ options = {
 
    # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
    # as the only entry in your upgrade path.
-   "only_allow_versions_in_upgrade_path": False,
+   "only_allow_versions_in_upgrade_path": True,
 }
 
 """
@@ -530,7 +530,7 @@ def cleanup_files():
     global options, log_hdl
     global delete_system_image, del_kickstart_image
 
-    poap_log("\n\nCleanup all files")
+    poap_log("Cleaning up all POAP files")
 
     # Destination config
     cleanup_file_from_option("destination_config")
@@ -1119,7 +1119,7 @@ def copy_config():
             if verify_md5(md5_sum_given, os.path.join(options["destination_path"], poap_file)):
                 #This isn't running
                 poap_log("File %s already exists and MD5 matches" % os.path.join(options["destination_path"], poap_file))
-                split_config_file()
+                
                 return
         elif not md5_sum_given:
             poap_log("MD5 sum given is invalid: %s" % md5_sum_given)
@@ -1291,7 +1291,7 @@ def copy_system():
         if not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
             abort("#### System file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
     poap_log("INFO: Completed Copy of System Image to %s" % os.path.join(options["destination_path"], org_file))
-    delete_system_image = True
+    delete_system_image = False
 
 
 def copy_kickstart():
@@ -1400,7 +1400,7 @@ def install_nxos_issu():
 
 
     if os.path.exists(os.path.join(options["destination_path"], options["upgrade_system_image"])):
-        poap_log("File %s was found on the bootflash" % os.path.join(options["destination_path"], options["upgrade_system_image"]))
+        poap_log("File %s was found on the bootflash" % system_image_path)
     else:
         poap_log("File %s was not found on the bootflash! The installation cannot run." % os.path.join(options["destination_path"], options["upgrade_system_image"]))
         abort("Exiting script")
@@ -2343,12 +2343,12 @@ def erase_configuration():
     been set to enabled.
     """
     try:
-        cli("terminal dont-ask ; write erase")
-        time.sleep(5)
         cli("config ; no boot poap enable")
         time.sleep(5)
         # This must be run in order to save "no boot poap enable" to the supervisor startup configuration
         cli("copy running-config startup-config")
+        time.sleep(5)
+        cli("terminal dont-ask ; write erase")
         time.sleep(5)
         poap_log("Startup configuration has been successfully erased")
     except Exception as e:
@@ -2535,6 +2535,8 @@ def main():
         parse_poap_yaml()
     #check_multilevel_install()
 
+    erase_configuration()
+
     is_this_the_final_upgrade = set_next_upgrade_from_upgrade_path()
     # If the switch is already on the final NX-OS version. There is nothing to do.
     if is_this_the_final_upgrade is None:
@@ -2584,7 +2586,7 @@ def main():
     # remove_file(os.path.join("/bootflash", options["split_config_second"]))
     #if (options["use_nxos_boot"] == False):
 
-    erase_configuration()
+
     
     install_nxos_issu()
 
