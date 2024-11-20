@@ -102,8 +102,8 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   #"upgrade_path": ["nxos.9.3.10.bin"],
+   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -1136,9 +1136,9 @@ def copy_config():
 
     poap_log("The config file path is: " + config_file_with_colon)
     poap_log("Copying configuration file to startup configuration")
-    #config_file_contents = cli("show file %s" % config_file)
-    #poap_log("config file contents areeeeeeee")
-    #poap_log(config_file_contents)
+    config_file_contents = cli("show file %s" % config_file_with_colon)
+    poap_log("config file contents areeeeeeee")
+    poap_log(config_file_contents)
 
     try:
         poap_log("Running command: copy %s startup-config" % config_file_with_colon)
@@ -1815,7 +1815,7 @@ def verify_freespace():
     Checks if the available space in bootflash is sufficient enough to
     download config and required images.
     """
-    poap_log("Verifying freespace in bootflash")
+    poap_log("Verifying freespace of bootflash")
     s = os.statvfs("/bootflash/")
     freespace = (s.f_bavail * s.f_frsize) / 1024
     poap_log("Free bootflash space is %s" % freespace)
@@ -2596,6 +2596,8 @@ def main():
 
     
     install_nxos_issu()
+
+    poap_cleanup_script_logs()
 
     log_hdl.close()
     exit(0)
