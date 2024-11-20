@@ -102,13 +102,13 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   #"upgrade_path": ["nxos.9.3.10.bin"],
+   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
-   "https_ignore_certificate": False,
-   "disable_md5": False,
+   "https_require_certificate": False,
+   "require_md5": True,
    # This option can be used to restrict the script to only affect switches that are explicitly in the upgrade path.
    # This can be set to false to allow downgrades.
 
@@ -117,7 +117,7 @@ options = {
 
    # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
    # as the only entry in your upgrade path.
-   "only_allow_versions_in_upgrade_path": True,
+   "only_allow_versions_in_upgrade_path": False,
 }
 
 """
@@ -203,10 +203,10 @@ def set_defaults_and_validate_options():
     set_default("serial_number","")
     set_default("install_path", "")
     set_default("use_nxos_boot", False)
-    set_default("https_ignore_certificate", options["https_ignore_certificate"])
+    set_default("https_require_certificate", options["https_require_certificate"])
     
     # MD5 Verification
-    set_default("disable_md5", options["disable_md5"])
+    set_default("require_md5", options["require_md5"])
 
     # Midway system and kickstart source file name.
     # This should be a 6.x U6 or greater dual image.
@@ -500,6 +500,7 @@ def remove_file(filename):
     """
     if os.path.isfile(filename):
         try:
+            poap_log("Removing file: %s" % filename)
             os.remove(filename)
         except (IOError, OSError) as e:
             poap_log("Failed to remove %s: %s" % (filename, str(e)))
@@ -832,7 +833,7 @@ def md5sum(filename):
     if filename.startswith('/bootflash'):
         filename = filename.replace('/bootflash/', 'bootflash:', 1)
 
-    poap_log("file name is %s" % filename)
+    poap_log("Calculating MD5 for file: %s" % filename)
     md5_sum = "Unknown"
     md5_output = cli("show file %s md5sum" % filename)
     if legacy:
@@ -848,7 +849,7 @@ def md5sum(filename):
         if result != None:
             md5_sum = result.group(1)
 
-    poap_log("INFO: md5sum %s (recalculated)" % md5_sum)
+    #poap_log("MD5 calculated: %s" % md5_sum)
     return md5_sum
 
 
@@ -860,9 +861,9 @@ def verify_md5(md5given, filename):
         md5given: md5 value fetched from .md5 file
         filename: Name of the file that is copied/downloaded.
     """
-    poap_log("Verifying MD5 checksum")
+    poap_log("Verifying MD5 checksums")
     if not os.path.exists("%s" % filename):
-        poap_log("ERROR: File %s does not exit" % filename)
+        poap_log("ERROR: File %s does not exist" % filename)
         return False
 
     md5calculated = md5sum(filename)
@@ -877,9 +878,9 @@ def verify_md5(md5given, filename):
     poap_log("MD5 given: " + md5given)
     poap_log("MD5 calculated: " + md5calculated)
     if md5given == md5calculated:
-        poap_log("MD5 match for file = {0}".format(filename))
+        poap_log("MD5 match for file: {0}".format(filename))
         return True
-    poap_log("MD5 mis-match for file = {0}".format(filename))
+    poap_log("MD5 mis-match for file: {0}".format(filename))
     return False
 
 
@@ -997,7 +998,7 @@ def do_copy(source="", dest="", login_timeout=10, dest_tmp="", compact=False, do
                 else:
                     copy_cmd += "copy %s://%s@%s%s %s compact vrf %s" % (
                         protocol, user, host, source, copy_tmp, vrf)
-            elif (protocol == "https" and options["https_ignore_certificate"] == True):
+            elif (protocol == "https" and options["https_require_certificate"] == False):
                 if global_use_kstack == True:
                     copy_cmd += "copy %s://%s@%s%s %s ignore-certificate vrf %s use-kstack" % (
                         protocol, user, host, source, copy_tmp, vrf)
@@ -1089,8 +1090,7 @@ def copy_md5_info(file_path, file_name):
     tmp_file = "%s.tmp" % md5_file_name
     timeout = options["timeout_config"]
     src = os.path.join(file_path, md5_file_name)
-    poap_log("Starting Copy of MD5 from: %s to: %s" % (
-                 src, os.path.join(options["destination_path"], md5_file_name)))
+    poap_log("Starting Copy of MD5 from: %s to: %s" % (src, os.path.join(options["destination_path"], md5_file_name)))
     if os.environ['POAP_PHASE'] != "USB":
         poap_log("File transfer_protocol = %s" % options["transfer_protocol"])
     
@@ -1111,48 +1111,47 @@ def copy_config():
     global options
 
     poap_file = options["destination_config"]
-    if options["disable_md5"] == False:
+    config_file = os.path.join(options["destination_path"], poap_file)
+    config_file_with_colon = config_file.replace('/bootflash/', 'bootflash:', 1)
+
+    if os.path.exists(os.path.join(options["destination_path"], poap_file)):
+        poap_log("Configuration file already exists on bootflash")
+    else:
+        poap_log("Configuration file %s not found" % config_file_with_colon)
+        poap_log("Starting Copy of configuration file to: %s" % config_file)
+        tmp_file = "%s.tmp" % poap_file
+        timeout = options["timeout_config"]
+        src = os.path.join(options["config_path"], options["source_config_file"])
+        do_copy(src, poap_file, timeout, tmp_file)
+
+    if options["require_md5"] == True:
         copy_md5_info(options["config_path"], options["source_config_file"])
         md5_sum_given = get_md5(options["source_config_file"])
+        # Remove poap.cfg.md5 after getting the MD5
         remove_file(os.path.join(options["destination_path"], "%s.md5" % options["source_config_file"]))
-        if md5_sum_given and os.path.exists(os.path.join(options["destination_path"], poap_file)):
-            if verify_md5(md5_sum_given, os.path.join(options["destination_path"], poap_file)):
-                #This isn't running
-                poap_log("File %s already exists and MD5 matches" % os.path.join(options["destination_path"], poap_file))
-                
-                return
-        elif not md5_sum_given:
-            poap_log("MD5 sum given is invalid: %s" % md5_sum_given)
-    poap_log("Starting Copy of configuration file to: %s" % os.path.join(options["destination_path"], poap_file))
-    tmp_file = "%s.tmp" % poap_file
-    timeout = options["timeout_config"]
-    src = os.path.join(options["config_path"], options["source_config_file"])
+        if verify_md5(md5_sum_given, config_file):
+            poap_log("Configuration apply can continue")
+        else:
+            abort("MD5 for configuration file %s failed!" % config_file_with_colon)
 
-    do_copy(src, poap_file, timeout, tmp_file)
-
-    if options["disable_md5"] == False:
-        if md5_sum_given and not verify_md5(md5_sum_given, os.path.join(options["destination_path"], poap_file)):
-            abort("#### config file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], poap_file))
-    poap_log("This is just before the 2nd split config file")
-    #split_config_file()
-    
-    config_file = os.path.join(options["destination_path"], poap_file)
-    config_file = config_file.replace('/bootflash/', 'bootflash:', 1)
-    poap_log("The config file path is: " + config_file)
+    poap_log("The config file path is: " + config_file_with_colon)
     poap_log("Copying configuration file to startup configuration")
-    
+    #config_file_contents = cli("show file %s" % config_file)
+    #poap_log("config file contents areeeeeeee")
+    #poap_log(config_file_contents)
 
     try:
         poap_log("Running command: copy %s startup-config" % config_file)
         cli("copy %s startup-config" % config_file)
         time.sleep(5)
     except Exception as e:
-        poap_log("Could not copy config to startup configuration!" % config_file)
+        poap_log("Could not copy configuration file to startup configuration!" % config_file)
         abort(str(e))
 
+    # Remove the configuration file after applying
     remove_file(config_file)
 
-    poap_log("INFO: Completed copy of config file to %s" % os.path.join(options["destination_path"], poap_file))
+    #poap_log("Completed copy of configuration file to %s" % os.path.join(options["destination_path"], poap_file))
 
 def is_image_cs_or_msll():
     
@@ -1240,7 +1239,7 @@ def copy_system():
     md5_sum_given = None
   
             
-    if options["disable_md5"] == True and target_system_image_is_currently_running():
+    if options["require_md5"] == False and target_system_image_is_currently_running():
         poap_log("Currently running image is target image. Skipping system image download")
         return
 
@@ -1252,7 +1251,7 @@ def copy_system():
         do_compact = False
 
     org_file = options["upgrade_system_image"]
-    if options["disable_md5"] == False:
+    if options["require_md5"] == True:
         copy_md5_info(options["upgrade_image_path"], options["upgrade_system_image"])
         md5_sum_given = get_md5(options["upgrade_system_image"])
         remove_file(os.path.join(options["destination_path"], "%s.md5" % options["upgrade_system_image"]))
@@ -1287,7 +1286,7 @@ def copy_system():
         do_compact = False
         do_copy(src, org_file, timeout, tmp_file)
 
-    if options["disable_md5"] == False and md5_sum_given and do_compact == False:
+    if options["require_md5"] == True and md5_sum_given and do_compact == False:
         if not verify_md5(md5_sum_given, os.path.join(options["destination_path"], org_file)):
             abort("#### System file %s MD5 verification failed #####\n" % os.path.join(options["destination_path"], org_file))
     poap_log("INFO: Completed Copy of System Image to %s" % os.path.join(options["destination_path"], org_file))
@@ -1302,7 +1301,7 @@ def copy_kickstart():
     global del_kickstart_image
     poap_log("Copying kickstart image")
     org_file = options["destination_kickstart_image"]
-    if options["disable_md5"] == False:
+    if options["require_md5"] == True:
         copy_md5_info(options["target_image_path"], options["target_kickstart_image"])
         md5_sum_given = get_md5(options["target_kickstart_image"])
         remove_file(os.path.join(options["destination_path"], "%s.md5" %
@@ -1325,7 +1324,7 @@ def copy_kickstart():
     src = os.path.join(options["target_image_path"], options["target_kickstart_image"])
     do_copy(src, org_file, timeout, tmp_file)
 
-    if options["disable_md5"] == False and md5_sum_given:
+    if options["require_md5"] == True and md5_sum_given:
         if not verify_md5(md5_sum_given,
                           os.path.join(options["destination_path"], org_file)):
             abort("#### Kickstart file %s%s MD5 verification failed #####\n" % (
@@ -1501,7 +1500,7 @@ def parse_poap_yaml():
     md5_verification = True
     
     try:
-        if options["disable_md5"] == False:
+        if options["require_md5"] == True:
             copy_md5_info(os.path.join(options["install_path"], options["serial_number"]), options["serial_number"] + ".yaml")
             md5_sum_given = get_md5(options["serial_number"] + ".yaml")
             md5_verification = False
@@ -1509,7 +1508,7 @@ def parse_poap_yaml():
         else:
             do_copy(copy_path, dst, timeout, dst, False, True)
         # True is passed as last parameter so that script does not abort on copy failure.
-        if options["disable_md5"] == False and md5_sum_given:
+        if options["require_md5"] == True and md5_sum_given:
             md5_verification = verify_md5(md5_sum_given,
                       "/bootflash/poap_device_recipe.yaml")
             if not md5_verification:
@@ -1519,14 +1518,14 @@ def parse_poap_yaml():
         try:
             if not md5_verification:
                 exit(1)
-            if options["disable_md5"] == False:
+            if options["require_md5"] == True:
                 copy_md5_info(os.path.join(options["install_path"], options["serial_number"]), options["serial_number"] + ".yml")
                 md5_sum_given = get_md5(options["serial_number"] + ".yml")
                 md5_verification = False
                 do_copy(alt_path, dst, timeout, dst)
             else:
                 do_copy(alt_path, dst, timeout, dst, False, True)
-            if options["disable_md5"] == False and md5_sum_given:
+            if options["require_md5"] == True and md5_sum_given:
                 md5_verification = verify_md5(md5_sum_given,
                           "/bootflash/poap_device_recipe.yaml")
             if not md5_verification:
@@ -2185,7 +2184,7 @@ def download_personality_tarball():
     matches with the value .md5 file downloaded.
     """
     md5_sum_given = None
-    if options["disable_md5"] == False:
+    if options["require_md5"] == True:
         copy_md5_info(options["personality_path"], options["destination_tarball"])
         md5_sum_given = get_md5(options["destination_tarball"])
         remove_file(os.path.join(options["destination_path"], "%s.md5" %
@@ -2210,7 +2209,7 @@ def download_personality_tarball():
     do_copy(tarball_path, options["destination_tarball"],
             options["timeout_copy_personality"], tmp_file)
 
-    if options["disable_md5"] == False and md5_sum_given:
+    if options["require_md5"] == True and md5_sum_given:
         if not verify_md5(md5_sum_given, os.path.join(options["destination_path"],
                                                       options["destination_tarball"])):
             abort("#### Tar file %s MD5 verification failed #####\n" %
@@ -2536,6 +2535,14 @@ def main():
     #check_multilevel_install()
 
     erase_configuration()
+
+    if options["require_md5"] == True:
+        poap_log("You have set Require MD5 to True")
+        poap_log("All files that are applied will have MD5 sums verified")
+    if options["require_md5"] == False:
+        poap_log("You have set Require MD5 to False")
+        poap_log("All files that are applied will not have MD5 sums verified")
+
 
     is_this_the_final_upgrade = set_next_upgrade_from_upgrade_path()
     # If the switch is already on the final NX-OS version. There is nothing to do.
