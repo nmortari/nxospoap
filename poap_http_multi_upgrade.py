@@ -20,7 +20,6 @@ from time import gmtime, strftime
 import tarfile
 import errno
 import yaml
-import string
 
 
 try:
@@ -37,100 +36,60 @@ except ImportError:
     legacy = False
 
 
-
-
-
-
-"""
-Increasing the script timeout to handle the legacy nxos
-versions where upgrading will take time
-"""
-# script_timeout=1800
-# --- Start of user editable settings ---
-# Host name and user credential
-# Add the install_path option to install licenses, rpms,
-# and certificates through script from the path mentioned. 
-# A file named <serial-number>.yaml is to be placed inside a folder named serial-number
-# which has details of files to be installed for the particular box.
-# eg. if option added is "install_path" : "/tftpboot/"
-# expected file is /tftpboot/<serial-number>/<serial-number>.yaml
-# Keywords to be used are Version, License, RPM, Certificate and Trustpoint.
-# Version is a mandatory keyword and it should be 1 for this release.
-# License : All the license files to be installed need to be listed in this
-# section in proper yaml syntax. Path should be relative to install_path
-# RPM : All rpm files to be installed need to be listed in this section in
-# proper yaml syntax. Path should be relative to install_path
-# Certificate: All certificate files and public key files which do not have a
-# trustpoint associated need to be listed in this section in proper yaml syntax.
-# These will only be copied to bootflash/poap_files/
-# Trustpoint : All pkcs12 certificates obtained from CA and which need trustpoint to be
-# configured need to be listed against the correct CA-trustpoint name for 
-# the same certificate with passphrase in proper yaml syntax.
-#
-# Sample YAML file (name XYZ12345.yaml)
-# ----------------------------------------------------------------------------
-# Version: 1
-# Certificate:
-# - ssh_key1.pub
-# - XYZ12345/nxapi_server_key.pem
-# - XYZ12345/nxapi_server_cert.pem
-# License:
-# - XYZ12345/XYZ12345_1.lic
-# - XYZ12345_2.lic
-# RPM:
-# - POAP_TPARTY_AND_PATCH_RPMS/chef-12.19.33-1.nexus7.x86_64.rpm
-# - mtx-openconfig-vlan-1.0.0.206-9.3.5.lib32_n9000.rpm
-# - POAP_TPARTY_AND_PATCH_RPMS/nxos.POAP_SMU_BGP_RELOAD-n9k_ALL-1.0.0-9.3.5.lib32_n9000.rpm
-# Target_image: nxos.9.3.5.bin
-# Trustpoint:
-#   Z1_TP:
-#     POAP_TP_FILES/XYZ12345/Z1_TP.pfx: passphrase1
-#   Z2_TP:
-#     POAP_TP_FILES/XYZ12345/Z2_TP.p12: passphrase2
-# ----------------------------------------------------------------------------
-# Additionally a "Target_image" can also be defined in .yaml file for a box to override the
-# target image for that specific box as opposed to the target_system_image given as common to all boxes
-# through script. If Target_image mentioned in yaml then that image should be kept only in 
-# target_system_image path mentioned within poap script. No relative path support for Target_image in yaml file
-
-
 #Global options that are used throughout the script
 options = {
-   "username": "username",
-   "password": "password",
-   "hostname": "10.0.0.6",
-   "transfer_protocol": "http",
-   "mode": "serial_number",
-   #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   "upgrade_path": ["nxos.9.3.10.bin"],
-   "config_path": "/files/poap/config/",
-   "upgrade_image_path": "/files/nxos/",
-   "required_space": 100000,
-   "https_require_certificate": False,
-   "require_md5": True,
-   # This option can be used to restrict the script to only affect switches that are explicitly in the upgrade path.
-   # This can be set to false to allow downgrades.
+    # (Optional) Username to connect to the remote server
+    #"username": "username",
 
-   # Example-1: If you have all leaf switches on 9.3.9, and all spine switches on 9.3.10, and you ONLY want to
-   # upgrade the spines, you would set this to True and set your upgrade path to start at 9.3.10.
+    # (Optional) Password to connect to the remote server
+    #"password": "password",
 
-   # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
-   # as the only entry in your upgrade path.
-   "only_allow_versions_in_upgrade_path": False,
+    # (Required) Hostname or IP of the server to download from
+    "hostname": "10.0.0.6",
+
+    # (Required) Transfer protocol to use from the download server (scp, ftp, sftp, http, https, tftp)
+    "transfer_protocol": "http",
+    
+    # (Required) How to identify which configuration file the switch should download from the remote serve
+    # (serial_number, mac, hostname, personality, raw)
+    "mode": "serial_number",
+    
+    # (Required) List of NX-OS images required in the upgrade path for your device (https://www.cisco.com/c/dam/en/us/td/docs/dcn/tools/nexus-9k3k-issu-matrix/index.html)
+    # If you want to downgrade the OS, only put 1 entry in this list
+    #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+    "upgrade_path": ["nxos.9.3.9.bin"],
+    
+    # (Required) Which directory to find the configuration file
+    "config_path": "/files/poap/config/",
+    
+    # (Required) Which directory to find the NX-OS file
+    "upgrade_image_path": "/files/nxos/",
+    
+    # (Required) Set the required free space on the bootflash in MB (10,000 MB = 10 GB)
+    "required_space": 10000,
+    
+    # (Required) Set if HTTPS certificates are required
+    "https_require_certificate": False,
+    
+    # (Required) Set if MD5 sum verification is required
+    "require_md5": True,
+    
+    # (Required) Restrict the script to only affect switches that are explicitly in the upgrade path. This can be set to false to allow downgrades.
+    
+    # Example-1: If you have all leaf switches on 9.3.9, and all spine switches on 9.3.10, and you ONLY want to
+    # upgrade the spines, you would set this to True and set your upgrade path to start at 9.3.10.
+
+    # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
+    # as the only entry in your upgrade path.
+    "only_allow_versions_in_upgrade_path": False,
 }
 
 """
 Setting global_use_kstack to True makes copy operation use the 
 kstack option to copy images.
-Setting global_upgrade_bios to True makes sure BIOS gets upgraded
-to latest BIOS available with the new image.
 """
 global_use_kstack = False
-global_upgrade_bios = False
 global_copy_image = True
-
-#switch_os_is_in_upgrade_path = False
 switch_model = ""
 bios_version = ""
 bios_date = ""
@@ -168,9 +127,14 @@ def set_defaults_and_validate_options():
     if os.environ.get("POAP_PHASE", None) != "USB":
         # If the POAP phase is not USB, then do these things
         # Remote download needs more parameters
-        required_parameters.add("username")
-        required_parameters.add("password")
         required_parameters.add("hostname")
+        required_parameters.add("transfer_protocol")
+        required_parameters.add("mode")
+        required_parameters.add("config_path")
+        required_parameters.add("upgrade_image_path")
+        required_parameters.add("required_space")
+        required_parameters.add("require_md5")
+        required_parameters.add("only_allow_versions_in_upgrade_path")
 
     # If we are missing any required parameters
     missing_parameters = required_parameters.difference(list(options.keys()))
@@ -181,7 +145,6 @@ def set_defaults_and_validate_options():
 
     # Set the POAP mode
     set_default("mode", options["mode"])
-    
     # The next upgrade to target on the path
     set_default("upgrade_system_image", "")
     # List of the Cisco approved upgrade path
@@ -381,31 +344,12 @@ def init_globals():
     """
     Initializes all the global variables that are used in this POAP script
     """
-    global log_hdl, syslog_prefix
-    global empty_first_file, single_image
-    global valid_options
-    #switch_os_is_in_upgrade_path
-    global delete_system_image, del_kickstart_image
-    global switch_model, bios_version, bios_date, nxos_version, nxos_date, hostname
-
-    #Initialize the upgrade variable as false before verifying that the script should do anything to this switch
-    #s
-    #switch_model = ""
-    #bios_version = ""
-    #bios_date = ""
-    #nxos_filename = ""
-    #nxos_version = ""
-    #nxos_date = ""
-    #hostname = ""
+    global log_hdl, syslog_prefix, valid_options
 
     # A list of valid options
-    valid_options = set(["username", "password", "hostname"])
+    valid_options = set(["hostname"])
     log_hdl = None
     syslog_prefix = ""
-
-    # confirm image deletion
-    delete_system_image = False
-    # confirm image deletion
 
 
 def format_mac(syslog_mac=""):
@@ -450,15 +394,20 @@ def set_syslog_prefix():
 
 def poap_cleanup_script_logs():
     """
-    Deletes all the POAP log files in bootflash leaving
-    recent 4 files.
+    Deletes all the POAP log files on the bootflash
     """
     file_list = sorted(glob.glob(os.path.join("/bootflash", '*poap*script.log')), reverse=True)
-    poap_log("Found %d POAP script logs" % len(file_list))
-
-    #logs_for_removal = file_list[4:]
+    if len(file_list) == 0:
+        poap_log("No old POAP script logs were found")
+        return
+    elif len(file_list) == 1:
+        poap_log("Found %d old POAP script log" % len(file_list))
+        poap_log("The old POAP log will be deleted now")
+    else:
+        poap_log("Found %d old POAP script logs" % len(file_list))
+        poap_log("Old POAP logs will be deleted now")
+    
     for log in file_list:
-        poap_log("Deleting log: " + log)
         remove_file(log)
 
 
@@ -530,23 +479,16 @@ def cleanup_files():
     Cleanup all the POAP created files.
     """
     global options, log_hdl
-    global delete_system_image, del_kickstart_image
 
     poap_log("Cleaning up all POAP files")
 
-    # Destination config
+    # Delete downloaded NX-OS file
+    cleanup_file_from_option("destination_system_image")
+
+    # Delete downloaded configuration file
     cleanup_file_from_option("destination_config")
-    # Temporary split configs
-    #cleanup_file_from_option("split_config_first", True)
-    #cleanup_file_from_option("split_config_second", True)
-    # Destination system or NXOS image
-    if delete_system_image == True:
-        cleanup_file_from_option("destination_system_image")
-    # Destination kickstart image
-    #if del_kickstart_image == True:
-    #    cleanup_file_from_option("destination_kickstart_image")
-    # Destination config
-    cleanup_file_from_option("destination_config")
+
+    # Delete created directories
     os.system("rm -rf /bootflash/poap_files")
     os.system("rm -rf /bootflash_sup-remote/poap_files")
     os.system("rm -rf /bootflash/poap_replay01.cfg")
@@ -1815,18 +1757,40 @@ def copy_standby_files():
         os.system("cp -rf /bootflash/poap_files /bootflash_sup-remote/")
 
                 
-def verify_freespace():
+def verify_storage_capacity():
     """
-    Checks if the available space in bootflash is sufficient enough to
-    download config and required images.
+    Collects bootflash storage information and aborts the script if
+    there is not enough free space to satisfy the "required_space"
+    parameter in the options list.
     """
-    poap_log("Verifying freespace in bootflash")
-    s = os.statvfs("/bootflash/")
-    freespace = (s.f_bavail * s.f_frsize) / 1024
-    poap_log("Free bootflash space is %s" % freespace)
 
-    if int(options["required_space"]) > freespace:
-        abort("*** Not enough bootflash space to continue POAP ***")
+    global options
+
+    poap_log("Collecting bootflash storage information")
+    bootflash_stats = os.statvfs("/bootflash/")
+
+    total_capacity_bytes = (bootflash_stats.f_bsize * bootflash_stats.f_blocks)
+    total_capacity_megabytes = total_capacity_bytes / (1024 * 1024)
+    total_capacity_megabytes_formatted = f"{total_capacity_megabytes:,.2f} MB"
+
+    free_space_bytes = (bootflash_stats.f_bsize * bootflash_stats.f_bavail)
+    free_space_megabytes = free_space_bytes / (1024 * 1024)
+    free_space_megabytes_formatted = f"{free_space_megabytes:,.2f} MB"
+
+    used_space_megabytes = total_capacity_megabytes - free_space_megabytes
+    used_space_megabytes_formatted = f"{used_space_megabytes:,.2f} MB"
+
+    required_space_in_megabytes_formatted = f"{options['required_space']:,.2f} MB"
+
+    poap_log("Bootflash total capacity: %s" % total_capacity_megabytes_formatted)
+    poap_log("Bootflash used space: %s" % used_space_megabytes_formatted)
+    poap_log("Bootflash free space: %s" % free_space_megabytes_formatted)
+
+    if options["required_space"] >= free_space_megabytes:
+        abort("Exiting script. Bootflash free space does not meet the requirement of: %s" % required_space_in_megabytes_formatted)
+    else:
+        poap_log("Bootflash required space of %s has been satisfied" % required_space_in_megabytes_formatted)
+        poap_log("The script will continue")
 
 
 def set_cfg_file_serial():
@@ -1834,13 +1798,14 @@ def set_cfg_file_serial():
     Sets the name of the switch config file to download based on chassis
     serial number. e.g conf_FOC3825R1ML.cfg
     """
-    poap_log("Setting source cfg filename based-on serial number")
+    poap_log("You have set the options mode to serial number")
+    poap_log("Setting source configuration filename based on serial number")
 
     if 'POAP_SERIAL' in os.environ:
-        poap_log("serial number %s" % os.environ['POAP_SERIAL'])
+        poap_log("System serial number: %s" % os.environ['POAP_SERIAL'])
         options["source_config_file"] = "conf.%s" % os.environ['POAP_SERIAL']
         options["serial_number"] = os.environ['POAP_SERIAL']
-    poap_log("Selected conf file name : %s" % options["source_config_file"])
+    poap_log("Configuration file set as: %s" % options["source_config_file"])
 
 
 def set_cfg_file_mac():
@@ -2150,32 +2115,30 @@ def set_next_upgrade_from_user():
 
 
 def set_next_upgrade_from_upgrade_path():
-    """Checks the currently running image and the target image to see where on the upgrade path
-    the images lie. If there's a recommended upgrade between the current image and the target image
-    then that recommended upgrade is used as a midway image to jump between the current image
-    and the target. Setting the "midway_system_image" and "midway_kickstart_image" options will
-    override the upgrade that is used if we detect that we need to follow the upgrade path.
+    """
+    Checks the if the currently running image is the target image. If it is, return None.
+    Otherwise, If there's an upgrade between the current image and the target image
+    then that upgrade is installed first.
     """
     global options
     global nxos_filename
 
-    #poap_log("WE ARE IN THE NEXT UPGRADE PATH FUNCTION")
-    
-    #current_image_file = get_currently_booted_image_filename()
-    #poap_log("The currently running image file is : " + current_image_file)
-
+    # If the switch is currently running the last image in the upgrade_list, exit and don't do anything.
     if options["upgrade_path"][-1] == nxos_filename:
         poap_log("This switch is already on the final target image")
         return None
-    # look at everything except the final image in the upgrade path
+    # See if the currently running image is in upgrade_path list, except for the last entry in the list.
     if nxos_filename in options["upgrade_path"][:-1]:
+        # If the above is true, find the index of the currently running image, and add 1 so next_image_index finds the next image in the list.
         next_image_index = options["upgrade_path"].index(nxos_filename) + 1
+        # Set upgrade_system_image to be the file name we found from upgrade_path[next_image_index]
         options["upgrade_system_image"] = options["upgrade_path"][next_image_index]
         poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], nxos_filename))
-        # Return true if the upgrade system image (our current goal) is the 2nd to last image in the upgrade path.
+        # Return true if the upgrade system image (our current goal) is the last image in the upgrade path.
         # This means we need to copy the configuration because this is the last upgrade we are doing.
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
     else:
+        # If
         options["upgrade_system_image"] = options["upgrade_path"][0]
         return True
     
@@ -2303,15 +2266,18 @@ def setup_logging():
     Configures the log file this script uses
     """
     global log_hdl
+
+    poap_cleanup_script_logs()
+
     usb_mode = "usb_" if os.environ.get("POAP_PHASE", None) == "USB" else ""
 
     poap_script_log = "/bootflash/%s_poap_%s_%sscript.log" % (strftime("%Y%m%d%H%M%S", gmtime()), os.environ['POAP_PID'], usb_mode)
 
-    log_hdl = open(poap_script_log, "w+")
-
-    poap_log("Logfile name: %s" % poap_script_log)
-
-    poap_cleanup_script_logs()
+    try:
+        log_hdl = open(poap_script_log, "w+")
+        poap_log("Created logfile: %s" % poap_script_log)
+    except exception as e:
+        abort("Could not create log file! Error: %s " % str(e))
 
 
 def invoke_personality_restore():
@@ -2365,25 +2331,13 @@ def verify_current_switch_os_is_in_upgrade_path():
     This prevents the script from affecting a switch that is not being targeted for this upgrade wave.
     """
 
-    #global switch_os_is_in_upgrade_path
     global nxos_filename
     global options
 
-    #poap_log("nxos filename issssssssss:" + nxos_filename)
-    #poap_log("upgrade path isssssssss:" + str(options["upgrade_path"][0]))
-
-    #nxos = str(nxos_filename)
-    #upgrade_list = str(str(options["upgrade_path"][0]))
-    
-    #upgrade_list = str(options["upgrade_path"][0])
-
-    #if nxos_filename in str(options["upgrade_path"]):
     if nxos_filename in options["upgrade_path"]:
-        #switch_os_is_in_upgrade_path = True
         poap_log("The current NX-OS version was found in the upgrade path!")
         poap_log("the POAP script will continue!")
     else:
-        #poap_log("The current NX-OS version is not part of the upgrade path!")
         abort("The current NX-OS version is not part of the upgrade path!")
 
 def get_switch_model():
@@ -2439,6 +2393,22 @@ def get_DNS():
         poap_log("Unable to detect domain name servers!")
         abort(str(e))
 
+def get_IP_addresses():
+    """
+    Runs "show ip interface brief vrf all" and the filters it to get the IP address list.
+    """
+
+    
+    try:
+        show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
+        IP_addresses = show_IP_addresses.split('\n')
+        poap_log("This switch has the following IP address(es):")
+        for IP in IP_addresses:
+            poap_log(IP)
+    except Exception as e:
+        poap_log("Unable to detect interface IP information!")
+        abort(str(e))
+
 def main():
 
     global options
@@ -2457,87 +2427,40 @@ def main():
     # Set the prefix for syslogs based on the POAP mode
     set_syslog_prefix()
     
-    #NICK'S TESTING COMMANDS
-    
-    #my_list = ["apple", "banana", "cherry"]
-
-    #for item in my_list:
-    #    poap_log(item)
-    
-    
-        #result = shver.split()
-    
-    
-    #index = 0
-    #while index < len(result):
-    #    poap_log(result[index])
-    #    index += 1
-    
-    
-    #for x in result:
-    #    poap_log(result[x])
-    #poap_log(result[0])
-    #poap_log(result[1])
-    #poap_log(result[2])
-    #poap_log(result[3])
-    #poap_log(cli("show interface ethernet 1/1"))
-    
-    
-    #THESE COMMANDS OUTPUT SOME USEFUL INFORMATION COMPARED TO THE REST OF THIS SCRIPT
-
+    # Get the model of the switch
     get_switch_model()
+
+    # Get the NX-OS version of the switch
     get_nxos_version()
+
+    # Get the build date of the NX-OS version
     get_nxos_date()
+
+    # Get the BIOS version of the switch
     get_bios_version()
+
+    # Get the BIOS build date of the switch
     get_bios_date()
+
+    # Get the filename of the currently booted NX-OS version
     get_currently_booted_image_filename()
 
-    poap_log("This switch has the following IP address(es):")
-    
-    show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
-    IP_addresses = show_IP_addresses.split('\n')
-    for IP in IP_addresses:
-        poap_log(IP)
-    
+    # Get the current IP addresses on any interface of the switch
+    get_IP_addresses()
+
+    # Get the current DNS information of the switch
     get_DNS()
     
+    # If "only_allow_versions_in_upgrade_path" is set to True, check to see if the switch is currently on one
+    # of the NX-OS versions that is listed in the upgrade path. Otherwise, exit the script.
     if options["only_allow_versions_in_upgrade_path"] == True:
         verify_current_switch_os_is_in_upgrade_path()
 
+    # Verify the free space on the bootflash satisfies the free space requirement set by the user
+    verify_storage_capacity()
 
-
-    #NEED TO FINISH making the functions for htis part THIS PART
-
-    #show_switch_model = cli("show module | grep N9K | head lines 1 | tr ' ' '\n' | grep N9K")
-    #show_bios_version = cli("show version | i 'BIOS: version' | sed 's/.*version //'")
-    #show_bios_date = cli("show version | i 'BIOS compile time:' | tr ' ' '\n' | sed -n '7p'")
-    #show_os_version = cli("show version | i NXOS | tr ' ' '\n' | sed -n '5p'")
-    #show_os_date = cli("show version | i 'NXOS compile time' | tr ' ' '\n' | sed -n '7p'")
-    #show_IP_addresses = cli("show ip interface brief vrf all | i protocol")
-    #show_DNS = cli('show hosts | grep "Name servers"')
-    #show_hostname = cli("show hostname")
-
-    #poap_log("System model: " + show_switch_model)
-    #poap_log("System BIOS version: " + show_bios_version)
-    #poap_log("System BIOS built on: "+ show_bios_date)
-    #poap_log("System NX-OS version: " + show_os_version)
-    #poap_log("System NX-OS version built on: " + show_os_date)
-
-        
-    #poap_log(show_DNS)
-    #poap_log("This switch has hostname: " + show_hostname)
-
-    # Verify there's enough space (and fail if not)
-    verify_freespace()
-
-    # Now that we know we're going to try and copy, let's create
-    # the directory structure needed, if any
+    # Create the directory structure needed for the POAP process
     create_destination_directories()
-
-    # We are not using this option
-    #if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
-    #    parse_poap_yaml()
-    #check_multilevel_install()
 
     if options["require_md5"] == True:
         poap_log("You have set Require MD5 to True")
@@ -2557,45 +2480,11 @@ def main():
         poap_log("The configuration will now be copied because this is the final upgrade")
         copy_config()
 
-    #if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
-    #    validate_yaml_file()
-    #    copy_poap_files()
-    #    time.sleep(2)
-        #install_license()
-        #install_rpm()
-    #    time.sleep(2)
-        #install_certificate()
-    #    time.sleep(2)
-    #    copy_standby_files()
-        
+    abort("Abort, exiting for testing")
+
     copy_system()
 
     signal.signal(signal.SIGTERM, sig_handler_no_exit)
-    # install images
-    #if single_image == False:
-    #install_images()
-    #if global_upgrade_bios:
-    #    install_issu()
-    #elif options["use_nxos_boot"]:
-    #    install_images_7_x()
-
-    # Cleanup midway images if any
-    #cleanup_temp_images()
-
-    # Invoke personality restore if personality is enabled
-    #if options["mode"] == "personality":
-    #    invoke_personality_restore()
-    #    exit(0)
-
-    # if empty_first_file == 0:
-        # cli('copy bootflash:%s scheduled-config' % options["split_config_first"])
-        # poap_log("Done copying the first scheduled cfg")
-        # remove_file("/bootflash/%s" % options["split_config_first"])
-
-    # cli('copy bootflash:%s scheduled-config' % options["split_config_second"])
-    # poap_log("Done copying the second scheduled cfg")
-    # remove_file(os.path.join("/bootflash", options["split_config_second"]))
-    #if (options["use_nxos_boot"] == False):
 
     install_nxos_issu()
 
