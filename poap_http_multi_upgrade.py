@@ -102,8 +102,8 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   "upgrade_path": ["nxos.9.3.10.bin"],
+   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   #"upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -117,7 +117,7 @@ options = {
 
    # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
    # as the only entry in your upgrade path.
-   "only_allow_versions_in_upgrade_path": False,
+   "only_allow_versions_in_upgrade_path": True,
 }
 
 """
@@ -456,9 +456,10 @@ def poap_cleanup_script_logs():
     file_list = sorted(glob.glob(os.path.join("/bootflash", '*poap*script.log')), reverse=True)
     poap_log("Found %d POAP script logs" % len(file_list))
 
-    logs_for_removal = file_list[4:]
-    for old_log in logs_for_removal:
-        remove_file(old_log)
+    #logs_for_removal = file_list[4:]
+    for log in file_list:
+        poap_log("Deleting log: " + log)
+        remove_file(log)
 
 
 def poap_log(info):
@@ -1106,7 +1107,7 @@ def copy_config():
     Copies switch configuration file and verifies if the md5 of the config
     matches with the value present in .md5 file downloaded.
     """
-    poap_log("Starting copy of configuration file")
+    poap_log("Starting application of configuration file")
 
     global options
 
@@ -1128,6 +1129,7 @@ def copy_config():
         copy_md5_info(options["config_path"], options["source_config_file"])
         md5_sum_given = get_md5(options["source_config_file"])
         # Remove poap.cfg.md5 after getting the MD5
+        poap_log("Saved MD5 checksum for %s" % os.path.join(options["destination_path"], "%s.md5" % options["source_config_file"]))
         remove_file(os.path.join(options["destination_path"], "%s.md5" % options["source_config_file"]))
         if verify_md5(md5_sum_given, config_file):
             poap_log("Configuration apply can continue")
@@ -1815,7 +1817,7 @@ def verify_freespace():
     Checks if the available space in bootflash is sufficient enough to
     download config and required images.
     """
-    poap_log("Verifying freespace of bootflash")
+    poap_log("Verifying freespace in bootflash")
     s = os.statvfs("/bootflash/")
     freespace = (s.f_bavail * s.f_frsize) / 1024
     poap_log("Free bootflash space is %s" % freespace)
@@ -2314,7 +2316,7 @@ def invoke_personality_restore():
     Does a write erase (so POAP will run again) and invokes the
     POAP Personality restore CLI.
     """
-    cli("terminal dont-ask ; write erase")
+    #cli("terminal dont-ask ; write erase")
 
     try:
         cli("personality restore %s user-name %s password %s hostname %s vrf %s" % (
@@ -2530,11 +2532,9 @@ def main():
     create_destination_directories()
 
     # We are not using this option
-    if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
-        parse_poap_yaml()
+    #if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
+    #    parse_poap_yaml()
     #check_multilevel_install()
-
-    erase_configuration()
 
     if options["require_md5"] == True:
         poap_log("You have set Require MD5 to True")
@@ -2550,19 +2550,20 @@ def main():
         abort("The script will exit now")
     # If the switch is going to install the final upgrade, we need to copy the configuration.
     elif is_this_the_final_upgrade == True:
+        erase_configuration()
         poap_log("The configuration will now be copied because this is the final upgrade")
         copy_config()
 
-    if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
-        validate_yaml_file()
-        copy_poap_files()
-        time.sleep(2)
+    #if (len(options["install_path"]) != 0 and options["mode"] != "personality"):
+    #    validate_yaml_file()
+    #    copy_poap_files()
+    #    time.sleep(2)
         #install_license()
         #install_rpm()
-        time.sleep(2)
+    #    time.sleep(2)
         #install_certificate()
-        time.sleep(2)
-        copy_standby_files()
+    #    time.sleep(2)
+    #    copy_standby_files()
         
     copy_system()
 
@@ -2579,9 +2580,9 @@ def main():
     #cleanup_temp_images()
 
     # Invoke personality restore if personality is enabled
-    if options["mode"] == "personality":
-        invoke_personality_restore()
-        exit(0)
+    #if options["mode"] == "personality":
+    #    invoke_personality_restore()
+    #    exit(0)
 
     # if empty_first_file == 0:
         # cli('copy bootflash:%s scheduled-config' % options["split_config_first"])
@@ -2593,11 +2594,7 @@ def main():
     # remove_file(os.path.join("/bootflash", options["split_config_second"]))
     #if (options["use_nxos_boot"] == False):
 
-
-    
     install_nxos_issu()
-
-    poap_cleanup_script_logs()
 
     log_hdl.close()
     exit(0)
