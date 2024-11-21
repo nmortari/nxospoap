@@ -102,8 +102,8 @@ options = {
    "transfer_protocol": "http",
    "mode": "serial_number",
    #"target_system_image": "nxos64-cs.10.3.4a.M.bin",
-   "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-   #"upgrade_path": ["nxos.9.3.10.bin"],
+   #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
+   "upgrade_path": ["nxos.9.3.10.bin"],
    "config_path": "/files/poap/config/",
    "upgrade_image_path": "/files/nxos/",
    "required_space": 100000,
@@ -117,7 +117,7 @@ options = {
 
    # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
    # as the only entry in your upgrade path.
-   "only_allow_versions_in_upgrade_path": True,
+   "only_allow_versions_in_upgrade_path": False,
 }
 
 """
@@ -1138,20 +1138,23 @@ def copy_config():
 
     poap_log("The config file path is: " + config_file_with_colon)
     poap_log("Copying configuration file to startup configuration")
-    config_file_contents = cli("show file %s" % config_file_with_colon)
-    poap_log("config file contents areeeeeeee")
-    poap_log(config_file_contents)
+    #config_file_contents = cli("show file %s" % config_file_with_colon)
+    #poap_log("config file contents areeeeeeee")
+    #poap_log(config_file_contents)
 
     try:
-        poap_log("Running command: copy %s startup-config" % config_file_with_colon)
-        cli("copy %s startup-config" % config_file_with_colon)
+        poap_log("Running command: copy %s scheduled-config" % config_file_with_colon)
+        cli("copy %s scheduled-config" % config_file_with_colon)
         time.sleep(5)
+        #startup_config_contents = cli("show startup-config")
+        #cli("copy startup-config bootflash:poapconfigwrite.cfg")
+        #poap_log("startup config shows: " + startup_config_contents)
     except Exception as e:
         poap_log("Could not copy configuration file to startup configuration!" % config_file_with_colon)
         abort(str(e))
 
     # Remove the configuration file after applying
-    remove_file(config_file)
+    #remove_file(config_file)
 
     #poap_log("Completed copy of configuration file to %s" % os.path.join(options["destination_path"], poap_file))
 
@@ -2608,8 +2611,7 @@ if __name__ == "__main__":
         poap_log("Exception: {0} {1}".format(exc_type, exc_value))
         while exc_tb != None:
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            poap_log("Stack - File: {0} Line: {1}"
-                     .format(fname, exc_tb.tb_lineno))
+            poap_log("Stack - File: {0} Line: {1}".format(fname, exc_tb.tb_lineno))
             exc_tb = exc_tb.tb_next
         abort()
 
