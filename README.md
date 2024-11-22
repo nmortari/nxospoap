@@ -18,8 +18,12 @@ The following items are required for the POAP process:
 
 ## Instructions For Use:
 1. Input values for the options near the top of the script
-* Username (required) - The username needed to download files from your file server. If no login is required, a blank entry "" is allowed.
-* Password (required) - The password required to download files from your file server. If no login is required, a blank entry "" is allowed.
-* Hostname (required) - The hostname or IP of your file server
-* Transfer Protocol (required) - Which transfer protocol to use to download files from your file server. Allowed values are: scp, ftp, sftp, http, https, tftp.
-* Mode (required) - What should the script use to identify the configuration file stored on your file server. Allowed values are: serial_number, mac, hostname, personality, raw.
+* Username - The username needed to download files from your file server. If no login is required, a blank entry "" is allowed.
+* Password - The password needed to download files from your file server. If no login is required, a blank entry "" is allowed.
+* Hostname - The hostname or IP of your file server.
+* Transfer Protocol - Which transfer protocol to use to download files from your file server. Allowed values are: scp, ftp, sftp, http, https, tftp.
+* Mode - What should the script use to identify the configuration file stored on your file server. Allowed values are: serial_number, mac, hostname, personality, raw.
+* Upgrade Path - The list of NX-OS images required in the upgrade path for your device. Upgrade path information can be found on the Cisco upgrade Matrix page (https://www.cisco.com/c/dam/en/us/td/docs/dcn/tools/nexus-9k3k-issu-matrix/index.html). This option can be used in the following ways:
+```
+asdf
+```
