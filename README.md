@@ -3,18 +3,19 @@ This is a very thorough rewrite of the original Cisco NX-OS POAP script (https:/
 This script adds additional functionality and updated commands for NX-OS.
 
 ## Supported Functionality:
-- Allow a single upgrade from a specified version to a specified version
-- Allow a single upgrade from any version to a specified version
-- Allow a multi-stage upgrade from a specific version or version(s) to a specific version
-- Allow a multi-stage upgrade from any version to a specified version
-- Allow downgrades from any version to a specific version
+- Allow a single upgrade from a specific version to a specific version.
+- Allow a single upgrade from any version to a specific version.
+- Allow a multi-stage upgrade from a specific version or version(s) to a specific version.
+- Allow a multi-stage upgrade from any version to a specific version.
+- Allow downgrades from any version to a specific version.
 
 ## Requirements:
 The following items are required for the POAP process:
-- A Cisco Nexus switch running NX-OS version 7.0(3)I3(1) or higher
-- A file server that can support one of the following transfer protocols: SCP, FTP, SFTP, HTTP, HTTPS, TFTP
-- The NX-OS image file (or multiple image files) required to perform the ugprade
-- A configuration file for your POAP switch (or POAP switches) to load
+- A Cisco Nexus switch running NX-OS version 7.0(3)I3(1) or higher.
+- A file server that can support one of the following transfer protocols: SCP, FTP, SFTP, HTTP, HTTPS, TFTP.
+- The NX-OS image file (or multiple image files) required to perform the ugprade.
+- A configuration file for your POAP switch (or POAP switches) to load.
+- This Python script to execute the POAP process.
 
 ## Instructions For Use:
 1. Input values for the options near the top of the script
@@ -47,7 +48,7 @@ The following items are required for the POAP process:
     * **HTTPS Require Certificate** - Are HTTPS certificates required to connect to your file server
         * Allowed values are: True, False
 
-    * **Require MD5** - Should MD5 sums be verified for any files the script downloads.
+    * **Require MD5** - Should MD5 sums be verified for any files the script downloads. It is recommended to keep this as True.
         * Allowed values are: True, False
 
     * **Only Allow Versions In Upgrade Path** - Should the script only interact with switches that are running NX-OS versions listed in the upgrade path.
@@ -57,7 +58,41 @@ The following items are required for the POAP process:
         * Example-2: If you have various switches on 9.2.1, 9.2.3, and 9.2.4, but you want them to be able to join an upgrade path starting at 9.3.1, set this to False.
         * Example-3: If you want to downgrade switches, you would set this to False and enter your downgrade version as the only entry in your upgrade path.
 
-2. After your changes are complete, rerun the MD5 generation command for the POAP script with the following command:
+2. After your changes are complete (or any time you make a change to the script), regenerate the MD5 sum for the POAP script with the following command:
 ```
 f=poap_http_multi_upgrade.py ; cat $f | sed '/^#md5sum/d' > $f.md5 ; sed -i "s/^#md5sum=.*/#md5sum=\"$(md5sum $f.md5 | sed 's/ .*//')\"/" $f
 ```
+
+3. Copy the switch configuration file to your file server so it is available for the POAP script.
+    * Example: If you selected Serial Number as your mode, your configuration file must be named conf.<Switch Serial Number>.
+    * A valid configuration file can be found below:
+    ```
+    !
+    ! CONFIGURATION FILE FOR N9K
+    !
+    ! VARIABLES
+
+    hostname poaptest
+
+    vrf context management
+      ip route 0.0.0.0/0 1.1.1.1
+
+    username admin password abc123 role network-admin
+
+    interface mgmt0
+      vrf member management
+      ip address 1.1.1.2/24
+    ```
+
+4. If Require MD5 is set to True, generate an MD5 file for your configuration file. This must be stored in the same folder as your configuration file.
+    * MD5 sums can be generated with the following command:
+    ```
+    md5sum conf.SAL1911B05K > conf.SAL1911B05K.md5
+    ```
+5. Copy the NX-OS image file(s) to your file server so it is available for the POAP script.
+
+6. If Require MD5 is set to True, generate an MD5 file for your NX-OS image file(s). This must be stored in the same folder as your NX-OS file(s).
+    * MD5 sums can be generated with the following command:
+    ```
+    md5sum nxos.9.3.10.bin > nxos.9.3.10.bin.md5
+    ```
