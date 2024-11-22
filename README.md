@@ -19,11 +19,11 @@ The following items are required for the POAP process:
 ## Instructions For Use:
 1. Input values for the options near the top of the script
 
-* **Username** - The username needed to download files from your file server.
-    * If no login is required, a blank entry "" is allowed.
+    * **Username** - The username needed to download files from your file server.
+        * If no login is required, a blank entry "" is allowed.
 
-* **Password** - The password needed to download files from your file server.
-    * If no login is required, a blank entry "" is allowed.
+    * **Password** - The password needed to download files from your file server.
+        * If no login is required, a blank entry "" is allowed.
 
 * **Hostname** - The hostname or IP of your file server.
 
