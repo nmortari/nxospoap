@@ -38,11 +38,11 @@ except ImportError:
 
 #Global options that are used throughout the script
 options = {
-    # (Optional) Username to connect to the remote server
-    #"username": "username",
+    #(Required) Username to connect to the remote server
+    "username": "username",
 
-    # (Optional) Password to connect to the remote server
-    #"password": "password",
+    #(Required) Password to connect to the remote server
+    "password": "password",
 
     # (Required) Hostname or IP of the server to download from
     "hostname": "10.0.0.6",
@@ -55,9 +55,10 @@ options = {
     "mode": "serial_number",
     
     # (Required) List of NX-OS images required in the upgrade path for your device (https://www.cisco.com/c/dam/en/us/td/docs/dcn/tools/nexus-9k3k-issu-matrix/index.html)
-    # If you want to downgrade the OS, only put 1 entry in this list
-    #"upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
-    "upgrade_path": ["nxos.9.3.9.bin"],
+    # Example-1: If you need multiple upgrades, ["nxos.9.2.1.bin", "nxos.9.2.4.bin", "nxos.9.3.14.bin", "nxos64-cs.10.3.4a.M.bin"]
+    # Example-2: If you only need 1 upgrade, ["nxos.9.3.9.bin", "nxos.9.3.10.bin"]
+    # Example-3: If you want to downgrade, ["nxos.9.2.4.bin"]
+    "upgrade_path": ["nxos.9.3.9.bin", "nxos.9.3.10.bin", "nxos64-cs.10.3.4a.M.bin"],
     
     # (Required) Which directory to find the configuration file
     "config_path": "/files/poap/config/",
@@ -74,14 +75,15 @@ options = {
     # (Required) Set if MD5 sum verification is required
     "require_md5": True,
     
-    # (Required) Restrict the script to only affect switches that are explicitly in the upgrade path. This can be set to false to allow downgrades.
-    
+    # (Required) Restrict the script to only affect switches that are explicitly in the upgrade path. This can be set to false to
+    # allow various OS versions that are below the beginnig of your upgrade path, or to allow downgrades.
     # Example-1: If you have all leaf switches on 9.3.9, and all spine switches on 9.3.10, and you ONLY want to
     # upgrade the spines, you would set this to True and set your upgrade path to start at 9.3.10.
-
+    # Example-2: If you have various switches on 9.2.1, 9.2.3, and 9.2.4, but you want them to be able to join an upgrade path starting
+    # at 9.3.1, set this to False.
     # Example-2: If you want to downgrade switches, you would set this to False and enter your downgrade version
     # as the only entry in your upgrade path.
-    "only_allow_versions_in_upgrade_path": False,
+    "only_allow_versions_in_upgrade_path": True,
 }
 
 """
@@ -128,6 +130,8 @@ def set_defaults_and_validate_options():
         # If the POAP phase is not USB, then do these things
         # Remote download needs more parameters
         required_parameters.add("hostname")
+        required_parameters.add("username")
+        required_parameters.add("password")
         required_parameters.add("transfer_protocol")
         required_parameters.add("mode")
         required_parameters.add("config_path")
@@ -347,7 +351,7 @@ def init_globals():
     global log_hdl, syslog_prefix, valid_options
 
     # A list of valid options
-    valid_options = set(["hostname"])
+    valid_options = set(["username", "password", "hostname"])
     log_hdl = None
     syslog_prefix = ""
 
@@ -1790,7 +1794,7 @@ def verify_storage_capacity():
         abort("Exiting script. Bootflash free space does not meet the requirement of: %s" % required_space_in_megabytes_formatted)
     else:
         poap_log("Bootflash required space of %s has been satisfied" % required_space_in_megabytes_formatted)
-        poap_log("The script will continue")
+        poap_log("The POAP script will continue")
 
 
 def set_cfg_file_serial():
@@ -2117,8 +2121,10 @@ def set_next_upgrade_from_user():
 def set_next_upgrade_from_upgrade_path():
     """
     Checks the if the currently running image is the target image. If it is, return None.
-    Otherwise, If there's an upgrade between the current image and the target image
-    then that upgrade is installed first.
+    Otherwise, set up the following scenarios:
+    Set the next installation for a single upgrade
+    Set the next installation in a multi-upgrade path
+    Set the next installation for a downgrade
     """
     global options
     global nxos_filename
@@ -2137,13 +2143,16 @@ def set_next_upgrade_from_upgrade_path():
         # Return true if the upgrade system image (our current goal) is the last image in the upgrade path.
         # This means we need to copy the configuration because this is the last upgrade we are doing.
         return options["upgrade_system_image"] == options["upgrade_path"][-1]
-    else:
-        # If
+    elif len(options["upgrade_path"]) > 1:
+        # you are not currently in the upgrade path, but you want to go to the first in the upgrade path. Return False to not copy configuration.
         options["upgrade_system_image"] = options["upgrade_path"][0]
+        poap_log("Next upgrade is to %s from %s" % (options["upgrade_system_image"], nxos_filename))
+        return False
+    else:
+        # You are not in the upgrade path, but you want to downgrade. Return True to copy configuration.
+        options["upgrade_system_image"] = options["upgrade_path"][0]
+        poap_log("Downgrading to %s from %s" % (options["upgrade_system_image"], nxos_filename))
         return True
-    
-    #poap_log("Image %s is not on the upgrade path" % nxos_filename)
-    return None
 
 
 def download_personality_tarball():
@@ -2454,7 +2463,12 @@ def main():
     # If "only_allow_versions_in_upgrade_path" is set to True, check to see if the switch is currently on one
     # of the NX-OS versions that is listed in the upgrade path. Otherwise, exit the script.
     if options["only_allow_versions_in_upgrade_path"] == True:
+        poap_log("You have set Only Allow Versions In Upgrade Path to True")
+        poap_log("Only switches that are listed in your upgrade path will be affected")
         verify_current_switch_os_is_in_upgrade_path()
+    if options["only_allow_versions_in_upgrade_path"] == False:
+        poap_log("You have set Only Allow Versions In Upgrade Path to False")
+        poap_log("Switches that are not listed in your upgrade path will be affected")
 
     # Verify the free space on the bootflash satisfies the free space requirement set by the user
     verify_storage_capacity()
@@ -2469,7 +2483,6 @@ def main():
         poap_log("You have set Require MD5 to False")
         poap_log("All files that are applied will not have MD5 sums verified")
 
-
     is_this_the_final_upgrade = set_next_upgrade_from_upgrade_path()
     # If the switch is already on the final NX-OS version. There is nothing to do.
     if is_this_the_final_upgrade is None:
@@ -2479,8 +2492,6 @@ def main():
         erase_configuration()
         poap_log("The configuration will now be copied because this is the final upgrade")
         copy_config()
-
-    abort("Abort, exiting for testing")
 
     copy_system()
 
