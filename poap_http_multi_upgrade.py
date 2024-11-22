@@ -1,8 +1,14 @@
 #!/bin/env python3
 #md5sum="af845466556fdc1653cf72e4af5ad1ad"
+
+# Rewritten by Nick Mortari
+# Technical Marketing Engineer
+# Cisco Systems - Cloud Networking Team
+
 """
-If any changes are made to this script, please run the below command
-in bash shell to update the above md5sum. This is used for integrity check.
+If any changes are made to this script, please run the command below in the same directory as your POAP script.
+The command will update the MD5 sum on line 2 of this file.
+
 f=poap_nexus_script.py ; cat $f | sed '/^#md5sum/d' > $f.md5 ; sed -i \
 "s/^#md5sum=.*/#md5sum=\"$(md5sum $f.md5 | sed 's/ .*//')\"/" $f
 """
@@ -163,10 +169,6 @@ def set_defaults_and_validate_options():
     set_default("upgrade_image_path", options["upgrade_image_path"])
     # Destination image and its path
     set_default("destination_path", "/bootflash/")
-    #set_default("destination_system_image", options["target_system_image"])
-    #set_default("destination_midway_system_image", "midway_system.bin")
-    #set_default("midway_system_image", [])
-    #set_default("skip_multi_level", False)
     set_default("serial_number","")
     set_default("install_path", "")
     set_default("use_nxos_boot", False)
@@ -174,10 +176,6 @@ def set_defaults_and_validate_options():
     
     # MD5 Verification
     set_default("require_md5", options["require_md5"])
-
-    # Midway system and kickstart source file name.
-    # This should be a 6.x U6 or greater dual image.
-    # Required only if moving from pre 6.x U6 image to 7.x/higher image.
 
     #set_default("midway_kickstart_image", "")
     #set_default("skip_multi_level", False)
@@ -191,15 +189,12 @@ def set_defaults_and_validate_options():
 
     set_default("vrf", os.environ['POAP_VRF'])
     set_default("destination_config", "poap_conf.cfg")
-    #set_default("split_config_first", "poap_1.cfg")
-    #set_default("split_config_second", "poap_2.cfg")
 
     # Timeout info (in seconds)
     # Not applicable for TFTP protocol. POAP script timeout can help
     # in the case of TFTP.
     set_default("timeout_config", 120)  # 2 minutes
     set_default("timeout_copy_system", 2100)  # 35 minutes
-    #set_default("timeout_copy_kickstart", 900)  # 15 minutes
     set_default("timeout_copy_personality", 900)  # 15 minutes
 
     # Personality
@@ -379,20 +374,17 @@ def set_syslog_prefix():
         if os.environ['POAP_PHASE'] == "USB":
             if 'POAP_RMAC' in os.environ:
                 poap_syslog_mac = "%s" % os.environ['POAP_RMAC']
-                syslog_prefix = "%s-MAC[%s]" % (
-                    syslog_prefix, poap_syslog_mac)
+                syslog_prefix = "%s-MAC[%s]" % (syslog_prefix, poap_syslog_mac)
                 return
             if 'POAP_MGMT_MAC' in os.environ:
                 poap_syslog_mac = "%s" % os.environ['POAP_MGMT_MAC']
-                syslog_prefix = "%s-MAC[%s]" % (
-                    syslog_prefix, poap_syslog_mac)
+                syslog_prefix = "%s-MAC[%s]" % (syslog_prefix, poap_syslog_mac)
                 return
         else:
             if 'POAP_MAC' in os.environ:
                 poap_syslog_mac = "%s" % os.environ['POAP_MAC']
                 poap_syslog_mac = format_mac(poap_syslog_mac)
-                syslog_prefix = "%s-MAC[%s]" % (
-                    syslog_prefix, poap_syslog_mac)
+                syslog_prefix = "%s-MAC[%s]" % (syslog_prefix, poap_syslog_mac)
                 return
 
 
@@ -424,10 +416,10 @@ def poap_log(info):
     """
     global log_hdl, syslog_prefix
 
-    # Don't syslog passwords
+    # Don't show passwords in syslog
     parts = re.split("\s+", info.strip())
     for (index, part) in enumerate(parts):
-        # blank out the password after the password keyword (terminal password *****, etc.)
+        # Blank out the password after the password keyword (password <removed>)
         if part == "password" and len(parts) >= index+2:
             parts[index+1] = "<removed>"
 
@@ -437,7 +429,8 @@ def poap_log(info):
     # We could potentially get a traceback (and trigger this) before
     # we have called init_globals. Make sure we can still log successfully
     try:
-        info = "%s - %s" % (syslog_prefix, info)
+        #info = "%s - %s" % (syslog_prefix, info)
+        info = "%s" % (info)
     except NameError:
         info = " - %s" % info
 
@@ -1084,17 +1077,12 @@ def copy_config():
 
     poap_log("The config file path is: " + config_file_with_colon)
     poap_log("Copying configuration file to startup configuration")
-    #config_file_contents = cli("show file %s" % config_file_with_colon)
-    #poap_log("config file contents areeeeeeee")
-    #poap_log(config_file_contents)
 
     try:
         poap_log("Running command: copy %s scheduled-config" % config_file_with_colon)
         cli("copy %s scheduled-config" % config_file_with_colon)
         time.sleep(5)
-        #startup_config_contents = cli("show startup-config")
-        #cli("copy startup-config bootflash:poapconfigwrite.cfg")
-        #poap_log("startup config shows: " + startup_config_contents)
+
     except Exception as e:
         poap_log("Could not copy configuration file to startup configuration!" % config_file_with_colon)
         abort(str(e))
@@ -1799,8 +1787,8 @@ def verify_storage_capacity():
 
 def set_cfg_file_serial():
     """
-    Sets the name of the switch config file to download based on chassis
-    serial number. e.g conf_FOC3825R1ML.cfg
+    Sets the script to find the configuration file based on system serial number.
+    Example: conf.FOC3825R1ML
     """
     poap_log("You have set the options mode to serial number")
     poap_log("Setting source configuration filename based on serial number")
@@ -1820,7 +1808,7 @@ def set_cfg_file_mac():
     poap_log("Setting source cfg filename based on the interface MAC")
     if os.environ.get("POAP_PHASE", None) == "USB":
         if options["usb_slot"] == 2:
-            poap_log("usb slot is 2")
+            poap_log("Using USB slot 2")
 
         config_file = "conf_%s.cfg" % os.environ['POAP_RMAC']
         options["serial_number"] = os.environ['POAP_RMAC']
@@ -2432,9 +2420,6 @@ def main():
 
     # Initialize parameters based on the mode
     setup_mode()
-
-    # Set the prefix for syslogs based on the POAP mode
-    set_syslog_prefix()
     
     # Get the model of the switch
     get_switch_model()
