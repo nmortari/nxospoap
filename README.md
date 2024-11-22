@@ -56,3 +56,8 @@ The following items are required for the POAP process:
         * Example-1: If you have all leaf switches on 9.3.9, and all spine switches on 9.3.10, and you ONLY want to upgrade the spines, you would set this to True and set your upgrade path to start at 9.3.10.
         * Example-2: If you have various switches on 9.2.1, 9.2.3, and 9.2.4, but you want them to be able to join an upgrade path starting at 9.3.1, set this to False.
         * Example-3: If you want to downgrade switches, you would set this to False and enter your downgrade version as the only entry in your upgrade path.
+
+2. After your changes are complete, rerun the MD5 generation command for the POAP script with the following command:
+```
+f=poap_http_multi_upgrade.py ; cat $f | sed '/^#md5sum/d' > $f.md5 ; sed -i "s/^#md5sum=.*/#md5sum=\"$(md5sum $f.md5 | sed 's/ .*//')\"/" $f
+```
