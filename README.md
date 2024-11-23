@@ -63,7 +63,7 @@ The following items are required for the POAP process:
 f=poap_http_multi_upgrade.py ; cat $f | sed '/^#md5sum/d' > $f.md5 ; sed -i "s/^#md5sum=.*/#md5sum=\"$(md5sum $f.md5 | sed 's/ .*//')\"/" $f
 ```
 
-3. Copy the switch configuration file to your file server so it is available for the POAP script. Your configuration file must be named `conf.<the mode you have selected in the options\>`.
+3. Copy the switch configuration file to your file server so it is available for the POAP script. Your configuration file must be named `conf.<options mode>`.
     * Example: If you selected Serial Number as your mode, your configuration file must be named `conf.SAL1911B05K`
     * A valid configuration file can be found below:
     ```
